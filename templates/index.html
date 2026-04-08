@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WSI QC Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>WSI QC Dashboard</h1>
+      <p>Professional triage for slide-feature coverage.</p>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <section class="toolbar">
+      <div class="toolbar-group">
+        <button id="refreshBtn" type="button">Refresh Index</button>
+        <button id="resetBtn" type="button" class="ghost-btn">Reset</button>
+      </div>
+      <div class="toolbar-group toolbar-search">
+        <label for="queryInput">Search</label>
+        <input id="queryInput" type="text" placeholder="slide, case, encoder" />
+      </div>
+      <div class="toolbar-group toolbar-right">
+        <button id="toggleDetailsBtn" type="button" class="ghost-btn">Hide Details</button>
+      </div>
+    </section>
+
+    <section class="summary-strip" id="summary"></section>
+
+    <section class="workspace">
+      <section class="worklist-panel">
+        <div class="worklist-head">
+          <nav class="status-tabs" id="statusTabs"></nav>
+        </div>
+
+        <div class="table-wrap">
+          <table id="recordsTable">
+            <thead>
+              <tr>
+                <th>Slide</th>
+                <th>Case</th>
+                <th>Features</th>
+                <th>Encoders</th>
+                <th>Size (GB)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="details-panel" id="detailsPanel">
+        <section class="details" id="details">
+          <div class="panel-head">
+            <h2>Details</h2>
+            <button id="closeDetailsBtn" type="button" class="ghost-btn">Close</button>
+          </div>
+          <p class="meta">Select a slide to inspect thumbnail and feature coverage.</p>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
