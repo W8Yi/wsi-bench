@@ -1,0 +1,14 @@
+{
+  "models": [
+    {
+      "model_id": "tcga_toy_sae_relu_ld12288_v1",
+      "model_name": "TCGA Toy SAE (ReLU, LD12288 v1)",
+      "encoder": "sae",
+      "dataset": "TCGA",
+      "slides_root": "/mnt/data/wsi_slides/TCGA",
+      "prototype_tiles_csv": "/mnt/data/sae_save/relu_sae_tcga_ld12288_v1/prototype_tiles.csv",
+      "top_attention_tiles_csv": "",
+      "tile_size": 256
+    }
+  ]
+}

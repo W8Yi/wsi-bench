@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WSI Bench - SAE Inspector</title>
+  <link rel="stylesheet" href="/static/sae.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>SAE Inspector</h1>
+      <p>Inspect sparse autoencoder behavior by model, encoder, and slide.</p>
+    </div>
+    <nav class="top-nav">
+      <a href="/">QC Dashboard</a>
+      <a href="/sae" class="active">SAE Inspector</a>
+    </nav>
+  </header>
+
+  <main class="app-main">
+    <section class="toolbar">
+      <div class="control">
+        <label for="encoderSelect">Encoder</label>
+        <select id="encoderSelect"></select>
+      </div>
+      <div class="control">
+        <label for="modelSelect">SAE Model</label>
+        <select id="modelSelect"></select>
+      </div>
+      <div class="control grow">
+        <label for="repSearch">Latent Search</label>
+        <input id="repSearch" type="text" placeholder="latent id, slide key, or case id" />
+      </div>
+      <div class="control actions">
+        <button id="refreshBtn" type="button">Refresh</button>
+      </div>
+    </section>
+
+    <section class="summary-strip" id="summary"></section>
+
+    <section class="workspace">
+      <section class="left-col">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Representative Latents</h2>
+            <div class="panel-tools">
+              <label for="repMethodSelect">Method</label>
+              <select id="repMethodSelect">
+                <option value="max_activation">Max activation</option>
+              </select>
+              <select id="latentGroupSelect">
+                <option value="">All groups</option>
+              </select>
+              <button id="clearLatentBtn" type="button" class="ghost">Clear focus</button>
+              <span class="meta" id="repMeta"></span>
+            </div>
+          </div>
+          <div id="repCards" class="rep-grid"></div>
+        </section>
+      </section>
+
+      <section class="right-col panel" id="detailPanel">
+        <div class="panel-head">
+          <h2>Latent Detail</h2>
+          <button id="toggleTechBtn" type="button" class="ghost">Show technical</button>
+        </div>
+        <div id="detailBody" class="detail-body">
+          <p class="meta">Select a representative latent tile to inspect details.</p>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/sae.js"></script>
+</body>
+</html>
