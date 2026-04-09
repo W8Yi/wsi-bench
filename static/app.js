@@ -52,6 +52,7 @@ function matchesQuery(record, q) {
   const hay = [
     record.slide.filename,
     record.slide.case_id,
+    record.slide.cohort,
     record.slide.slide_id,
     ...record.encoders,
   ].join(" ").toLowerCase();
@@ -122,7 +123,13 @@ function setDetailsCollapsed(collapsed) {
 }
 
 function renderTable() {
-  const rows = currentRows();
+  const rows = currentRows().slice().sort((a, b) => {
+    const cohortA = String(a.slide.cohort || "UNKNOWN");
+    const cohortB = String(b.slide.cohort || "UNKNOWN");
+    const byCohort = cohortA.localeCompare(cohortB);
+    if (byCohort !== 0) return byCohort;
+    return String(a.slide.filename || "").localeCompare(String(b.slide.filename || ""));
+  });
   el.tbody.innerHTML = "";
 
   for (const r of rows) {
@@ -137,6 +144,7 @@ function renderTable() {
     tr.innerHTML = `
       <td>${esc(r.slide.filename)}</td>
       <td>${esc(r.slide.case_id)}</td>
+      <td>${esc(r.slide.cohort || "UNKNOWN")}</td>
       <td>${featureBadge}</td>
       <td class="encoders-cell">${encoders}</td>
       <td>${bytesToGB(r.slide.size_bytes)}</td>
@@ -154,7 +162,7 @@ function renderTable() {
 
   if (rows.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="5" class="meta">No slides match current filter.</td>`;
+    tr.innerHTML = `<td colspan="6" class="meta">No slides match current filter.</td>`;
     el.tbody.appendChild(tr);
   }
 }
@@ -194,6 +202,7 @@ function renderDetails(record) {
       <div class="info-row"><strong>Slide</strong><span>${esc(record.slide.filename)}</span></div>
       <div class="info-row"><strong>Slide ID</strong><span>${esc(record.slide.slide_id)}</span></div>
       <div class="info-row"><strong>Case</strong><span>${esc(record.slide.case_id)}</span></div>
+      <div class="info-row"><strong>Cohort</strong><span>${esc(record.slide.cohort || "UNKNOWN")}</span></div>
       <div class="info-row"><strong>Size</strong><span>${bytesToGB(record.slide.size_bytes)} GB</span></div>
       <div class="info-row"><strong>Status</strong><span>${featureStatus}</span></div>
       <div class="info-row"><strong>Encoders</strong><span>${encoderText}</span></div>
