@@ -47,7 +47,7 @@ const el = {
   umapMeta: document.getElementById("umapMeta"),
   latentProfile: document.getElementById("latentProfile"),
   methodStrip: document.getElementById("methodStrip"),
-  contactSheetWrap: document.getElementById("contactSheetWrap"),
+  evidenceGridWrap: document.getElementById("evidenceGridWrap"),
   supportPreview: document.getElementById("supportPreview"),
   cohortRows: document.getElementById("cohortRows"),
 };
@@ -80,8 +80,14 @@ async function fetchJson(url) {
 }
 
 function filteredModels() {
-  if (!state.selectedEncoder) return state.models;
-  return state.models.filter((m) => m.encoder === state.selectedEncoder);
+  const rows = !state.selectedEncoder ? state.models : state.models.filter((m) => m.encoder === state.selectedEncoder);
+  const seen = new Set();
+  return rows.filter((m) => {
+    const key = String(m.model_id || "");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function renderEncoderSelect() {
@@ -504,16 +510,6 @@ function drawHistogram(hist) {
   ctx.fillText(hist.histogram_unit || "slide_max_activation", margin.left, height - 8);
 }
 
-function contactSheetUrl(detail) {
-  return `/api/sae/contact-sheet?${q({
-    model_id: state.selectedModelId,
-    latent_idx: detail.latent_idx,
-    strategy: detail.strategy,
-    method: detail.method || state.representativeMethod,
-    size: 768,
-  })}`;
-}
-
 function renderLatentProfile(detail) {
   const metric = detail.metric_row || {};
   const summary = detail.summary_row || {};
@@ -566,20 +562,10 @@ function renderLatentProfile(detail) {
   drawHistogram(detail.histogram || {});
   renderCohortTable(detail.cohort_rows || []);
 
-  if (detail.contact_sheet_available) {
-    el.contactSheetWrap.innerHTML = `
-      <div class="contact-sheet-card">
-        <img loading="lazy" src="${contactSheetUrl(detail)}" alt="contact sheet for latent ${esc(detail.latent_idx)}" />
-        <div class="meta">Materialized contact sheet for ${esc(detail.strategy || "-")} • ${esc(detail.method || state.representativeMethod || "-")}.</div>
-      </div>
-    `;
-  } else {
-    el.contactSheetWrap.innerHTML = `<p class="meta">No configured materialized contact sheet for this latent.</p>`;
-  }
-
   const preview = detail.support_preview || [];
   if (!preview.length) {
     el.supportPreview.innerHTML = `<p class="meta">No support preview rows available for this latent.</p>`;
+    el.evidenceGridWrap.innerHTML = `<p class="meta">No additional tiles available for this latent.</p>`;
   } else {
     el.supportPreview.innerHTML = `
       <div class="support-preview-grid">
@@ -590,6 +576,17 @@ function renderLatentProfile(detail) {
             <div>act ${Number(row.activation || 0).toFixed(3)}</div>
           </article>
         `).join("")}
+      </div>
+    `;
+    el.evidenceGridWrap.innerHTML = `
+      <div class="support-preview-grid">
+        ${preview.slice(6, 18).map((row) => `
+          <article class="support-preview-card">
+            <img loading="lazy" src="${tileUrl(row, row.slide_key, 144)}" alt="support tile" />
+            <div>${esc(row.slide_key || "-")}</div>
+            <div>act ${Number(row.activation || 0).toFixed(3)}</div>
+          </article>
+        `).join("") || `<p class="meta">No additional tiles beyond the primary preview set.</p>`}
       </div>
     `;
   }
@@ -690,7 +687,7 @@ async function loadFocusData() {
   if (state.selectedLatentIdx === null) {
     el.latentProfile.innerHTML = `<p class="meta">Select a representative latent tile or chart point to inspect latent-specific analytics.</p>`;
     el.methodStrip.innerHTML = `<p class="meta">Representative methods will appear here for the selected latent.</p>`;
-    el.contactSheetWrap.innerHTML = `<p class="meta">If a local materialized contact sheet is configured, it will appear here.</p>`;
+    el.evidenceGridWrap.innerHTML = `<p class="meta">A larger tile set for the selected latent will appear here.</p>`;
     el.supportPreview.innerHTML = `<p class="meta">Top support tiles for the selected latent will appear here.</p>`;
     renderCohortTable([]);
     drawEmptyCanvas(el.histCanvas, "No latent selected.");
