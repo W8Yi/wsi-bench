@@ -208,6 +208,49 @@ function applyRepresentativeFilter() {
   });
 }
 
+function strategyPriority(strategy) {
+  const order = {
+    top_activation: 0,
+    top_variance: 1,
+    top_sparsity: 2,
+    sdf_parent_balanced: 3,
+  };
+  return Object.prototype.hasOwnProperty.call(order, strategy) ? order[strategy] : 99;
+}
+
+function galleryRows() {
+  const rows = state.filteredRepresentatives || [];
+  if (state.representativeStrategy) {
+    return rows.map((r) => ({ ...r, grouped_strategies: [r.latent_strategy || ""] }));
+  }
+
+  const grouped = new Map();
+  for (const row of rows) {
+    const key = String(row.latent_idx);
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, {
+        row,
+        grouped_strategies: new Set([row.latent_strategy || ""]),
+      });
+      continue;
+    }
+    existing.grouped_strategies.add(row.latent_strategy || "");
+    const scoreA = Number(row.method_score || row.activation || 0);
+    const scoreB = Number(existing.row.method_score || existing.row.activation || 0);
+    const prA = strategyPriority(String(row.latent_strategy || ""));
+    const prB = strategyPriority(String(existing.row.latent_strategy || ""));
+    if (prA < prB || (prA === prB && scoreA > scoreB)) {
+      existing.row = row;
+    }
+  }
+
+  return Array.from(grouped.values()).map((item) => ({
+    ...item.row,
+    grouped_strategies: Array.from(item.grouped_strategies).filter(Boolean).sort((a, b) => strategyPriority(a) - strategyPriority(b)),
+  }));
+}
+
 function tileUrl(tile, slideKey, tileSize) {
   return `/api/sae/tile?${q({
     model_id: state.selectedModelId,
@@ -250,9 +293,12 @@ function renderFocusMeta() {
 
 function renderRepresentatives() {
   applyRepresentativeFilter();
-  const rows = state.filteredRepresentatives;
+  const rows = galleryRows();
   const maxScore = Math.max(...rows.map((r) => Number(r.method_score || r.activation || 0)), 1);
-  el.repMeta.textContent = `${rows.length} / ${state.representatives.length}`;
+  const uniqueCount = new Set((state.filteredRepresentatives || []).map((r) => String(r.latent_idx))).size;
+  el.repMeta.textContent = state.representativeStrategy
+    ? `${rows.length} cards`
+    : `${rows.length} unique latents • ${uniqueCount} visible`;
   el.repCards.innerHTML = "";
 
   if (rows.length === 0) {
@@ -272,6 +318,7 @@ function renderRepresentatives() {
       <div class="rep-body">
         <div class="rep-title">latent ${esc(r.latent_idx)} <span>${esc(r.latent_group || "-")}</span></div>
         <div class="rep-statline">${esc(r.latent_strategy || "-")} • ${esc(r.representative_method || state.representativeMethod || "-")}</div>
+        ${Array.isArray(r.grouped_strategies) && r.grouped_strategies.length > 1 ? `<div class="rep-tags">${r.grouped_strategies.map((s) => `<span class="rep-tag">${esc(s.replaceAll("_", " "))}</span>`).join("")}</div>` : ""}
         <div class="rep-statline">score ${Number(r.method_score || r.activation || 0).toFixed(3)} • activation ${Number(r.activation || 0).toFixed(3)}</div>
         <div class="spark"><span style="width:${width}"></span></div>
         <div class="rep-slide">${esc(r.slide_key || "-")}</div>
