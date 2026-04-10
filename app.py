@@ -372,6 +372,41 @@ class SaeCache:
         except Exception:
             return {}
 
+    def _infer_analytics_dir(self, entry: Dict[str, Any], rep_csv: Path) -> Optional[Path]:
+        raw = str(entry.get("analytics_dir", "")).strip()
+        if raw:
+            path = self._resolve_path(raw)
+            return path if path.exists() else None
+        bundle_dir = rep_csv.parent
+        bundle_name = bundle_dir.name
+        if bundle_name.startswith("representatives_"):
+            candidate = bundle_dir.parent / bundle_name.replace("representatives_", "analytics_", 1)
+            if candidate.exists():
+                return candidate
+        return None
+
+    def _resolve_analytics_artifact(
+        self,
+        *,
+        entry: Dict[str, Any],
+        analytics_dir: Optional[Path],
+        plot_manifest: Dict[str, Any],
+        entry_key: str,
+        artifact_key: str,
+        default_name: str,
+    ) -> Optional[Path]:
+        raw = str(entry.get(entry_key, "")).strip()
+        if raw:
+            return self._resolve_path(raw)
+        if analytics_dir is None:
+            return None
+        artifacts = plot_manifest.get("artifacts", {}) if isinstance(plot_manifest, dict) else {}
+        rel = str(artifacts.get(artifact_key, "")).strip()
+        if rel:
+            return analytics_dir / rel
+        default_path = analytics_dir / default_name
+        return default_path if default_path.exists() else None
+
     def _load_representative_rows(self, csv_path: Path) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         if not csv_path.exists():
@@ -446,6 +481,234 @@ class SaeCache:
         rows.sort(key=lambda x: (x["latent_strategy"], x["max_activation"], x["count"]), reverse=True)
         return rows
 
+    def _load_all_latent_metrics_rows(self, csv_path: Optional[Path]) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        if csv_path is None or not csv_path.exists():
+            return rows
+        with csv_path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                rows.append({
+                    "latent_idx": _to_int(r.get("latent_idx"), -1),
+                    "is_alive": _to_int(r.get("is_alive"), 0),
+                    "selected_strategies": [s for s in str(r.get("selected_strategies", "")).split(",") if s],
+                    "max_activation_global": _to_float(r.get("max_activation_global"), 0.0),
+                    "variance_global": _to_float(r.get("variance_global"), 0.0),
+                    "sparsity_score_global": _to_float(r.get("sparsity_score_global"), 0.0),
+                    "slide_prevalence": _to_float(r.get("slide_prevalence"), 0.0),
+                    "case_prevalence": _to_float(r.get("case_prevalence"), 0.0),
+                    "num_tiles_positive": _to_int(r.get("num_tiles_positive"), 0),
+                    "mean_positive_activation": _to_float(r.get("mean_positive_activation"), 0.0),
+                    "max_activation_seen": _to_float(r.get("max_activation_seen"), 0.0),
+                    "cohort_entropy": _to_float(r.get("cohort_entropy"), 0.0),
+                    "top_cohort": r.get("top_cohort") or "",
+                    "top_cohort_share": _to_float(r.get("top_cohort_share"), 0.0),
+                })
+        rows.sort(key=lambda x: (x["selected_strategies"] != [], x["max_activation_seen"], x["slide_prevalence"]), reverse=True)
+        return rows
+
+    def _load_selected_latent_slide_stats_rows(self, csv_path: Optional[Path]) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        if csv_path is None or not csv_path.exists():
+            return rows
+        with csv_path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                slide_key = (r.get("slide_key") or "").strip().upper()
+                if not slide_key:
+                    continue
+                rows.append({
+                    "latent_strategy": r.get("latent_strategy") or "",
+                    "latent_idx": _to_int(r.get("latent_idx"), -1),
+                    "latent_group": (r.get("latent_group") or "unknown").strip(),
+                    "case_id": (r.get("case_id") or to_case_id(slide_key)).upper(),
+                    "slide_key": slide_key,
+                    "cohort": r.get("cohort") or "",
+                    "slide_max_activation": _to_float(r.get("slide_max_activation"), 0.0),
+                    "slide_mean_positive_activation": _to_float(r.get("slide_mean_positive_activation"), 0.0),
+                    "positive_tile_count": _to_int(r.get("positive_tile_count"), 0),
+                    "total_tiles_seen": _to_int(r.get("total_tiles_seen"), 0),
+                    "fires": _to_int(r.get("fires"), 0),
+                })
+        rows.sort(key=lambda x: (x["latent_strategy"], x["latent_idx"], x["slide_max_activation"], x["positive_tile_count"]), reverse=True)
+        return rows
+
+    def _load_cohort_enrichment_rows(self, csv_path: Optional[Path]) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        if csv_path is None or not csv_path.exists():
+            return rows
+        with csv_path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                rows.append({
+                    "latent_strategy": r.get("latent_strategy") or "",
+                    "latent_idx": _to_int(r.get("latent_idx"), -1),
+                    "latent_group": (r.get("latent_group") or "unknown").strip(),
+                    "cohort": r.get("cohort") or "",
+                    "slides_in_cohort": _to_int(r.get("slides_in_cohort"), 0),
+                    "slides_with_activation": _to_int(r.get("slides_with_activation"), 0),
+                    "prevalence_in_cohort": _to_float(r.get("prevalence_in_cohort"), 0.0),
+                    "prevalence_global": _to_float(r.get("prevalence_global"), 0.0),
+                    "enrichment_ratio": _to_float(r.get("enrichment_ratio"), 0.0),
+                })
+        rows.sort(key=lambda x: (x["latent_strategy"], x["latent_idx"], x["enrichment_ratio"]), reverse=True)
+        return rows
+
+    def _load_latent_umap_rows(self, csv_path: Optional[Path]) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        if csv_path is None or not csv_path.exists():
+            return rows
+        with csv_path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                rows.append({
+                    "latent_idx": _to_int(r.get("latent_idx"), -1),
+                    "umap_x": _to_float(r.get("umap_x"), 0.0),
+                    "umap_y": _to_float(r.get("umap_y"), 0.0),
+                    "is_alive": _to_int(r.get("is_alive"), 0),
+                    "selected_strategies": [s for s in str(r.get("selected_strategies", "")).split(",") if s],
+                    "max_activation_global": _to_float(r.get("max_activation_global"), 0.0),
+                    "variance_global": _to_float(r.get("variance_global"), 0.0),
+                    "sparsity_score_global": _to_float(r.get("sparsity_score_global"), 0.0),
+                })
+        return rows
+
+    def _load_histograms(self, json_path: Optional[Path]) -> Dict[tuple[str, int], Dict[str, Any]]:
+        out: Dict[tuple[str, int], Dict[str, Any]] = {}
+        payload = self._load_json_file(json_path)
+        rows = payload.get("rows", []) if isinstance(payload, dict) else []
+        if not isinstance(rows, list):
+            return out
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            key = (str(row.get("latent_strategy", "")), _to_int(row.get("latent_idx"), -1))
+            out[key] = {
+                "latent_strategy": key[0],
+                "latent_idx": key[1],
+                "latent_group": (row.get("latent_group") or "unknown").strip(),
+                "bin_edges": row.get("bin_edges") if isinstance(row.get("bin_edges"), list) else [],
+                "counts": row.get("counts") if isinstance(row.get("counts"), list) else [],
+                "n_slides": _to_int(row.get("n_slides"), 0),
+                "n_firing_slides": _to_int(row.get("n_firing_slides"), 0),
+                "max_activation": _to_float(row.get("max_activation"), 0.0),
+                "histogram_unit": payload.get("histogram_unit", "slide_max_activation") if isinstance(payload, dict) else "slide_max_activation",
+            }
+        return out
+
+    def _build_analytics_data(self, entry: Dict[str, Any], rep_csv: Path) -> Dict[str, Any]:
+        analytics_dir = self._infer_analytics_dir(entry, rep_csv)
+        plot_manifest_path = None
+        raw_plot_manifest = str(entry.get("plot_manifest_json", "")).strip()
+        if raw_plot_manifest:
+            plot_manifest_path = self._resolve_path(raw_plot_manifest)
+        elif analytics_dir is not None and (analytics_dir / "plot_manifest.json").exists():
+            plot_manifest_path = analytics_dir / "plot_manifest.json"
+        plot_manifest = self._load_json_file(plot_manifest_path)
+
+        analytics_summary_path = self._resolve_analytics_artifact(
+            entry=entry,
+            analytics_dir=analytics_dir,
+            plot_manifest=plot_manifest,
+            entry_key="analytics_summary_json",
+            artifact_key="analytics_summary_json",
+            default_name="analytics_summary.json",
+        )
+        analytics_summary = self._load_json_file(analytics_summary_path)
+        all_latent_metrics_csv = self._resolve_analytics_artifact(
+            entry=entry,
+            analytics_dir=analytics_dir,
+            plot_manifest=plot_manifest,
+            entry_key="all_latent_metrics_csv",
+            artifact_key="all_latent_metrics_csv",
+            default_name="all_latent_metrics.csv",
+        )
+        selected_latent_slide_stats_csv = self._resolve_analytics_artifact(
+            entry=entry,
+            analytics_dir=analytics_dir,
+            plot_manifest=plot_manifest,
+            entry_key="selected_latent_slide_stats_csv",
+            artifact_key="selected_latent_slide_stats_csv",
+            default_name="selected_latent_slide_stats.csv",
+        )
+        cohort_enrichment_csv = self._resolve_analytics_artifact(
+            entry=entry,
+            analytics_dir=analytics_dir,
+            plot_manifest=plot_manifest,
+            entry_key="cohort_enrichment_csv",
+            artifact_key="cohort_enrichment_csv",
+            default_name="cohort_enrichment.csv",
+        )
+        latent_umap_csv = self._resolve_analytics_artifact(
+            entry=entry,
+            analytics_dir=analytics_dir,
+            plot_manifest=plot_manifest,
+            entry_key="latent_umap_csv",
+            artifact_key="latent_umap_csv",
+            default_name="latent_umap.csv",
+        )
+        histograms_json = self._resolve_analytics_artifact(
+            entry=entry,
+            analytics_dir=analytics_dir,
+            plot_manifest=plot_manifest,
+            entry_key="selected_latent_histograms_json",
+            artifact_key="selected_latent_histograms_json",
+            default_name="selected_latent_histograms.json",
+        )
+        case_label_enrichment_csv = self._resolve_analytics_artifact(
+            entry=entry,
+            analytics_dir=analytics_dir,
+            plot_manifest=plot_manifest,
+            entry_key="case_label_enrichment_csv",
+            artifact_key="case_label_enrichment_csv",
+            default_name="case_label_enrichment.csv",
+        )
+
+        all_latent_metrics = self._load_all_latent_metrics_rows(all_latent_metrics_csv)
+        selected_slide_stats = self._load_selected_latent_slide_stats_rows(selected_latent_slide_stats_csv)
+        cohort_enrichment = self._load_cohort_enrichment_rows(cohort_enrichment_csv)
+        latent_umap = self._load_latent_umap_rows(latent_umap_csv)
+        histograms_by_key = self._load_histograms(histograms_json)
+
+        slide_stats_by_key: Dict[tuple[str, int], List[Dict[str, Any]]] = defaultdict(list)
+        for row in selected_slide_stats:
+            slide_stats_by_key[(str(row["latent_strategy"]), int(row["latent_idx"]))].append(row)
+        for key in slide_stats_by_key:
+            slide_stats_by_key[key].sort(key=lambda x: (x["slide_max_activation"], x["positive_tile_count"]), reverse=True)
+
+        cohort_by_key: Dict[tuple[str, int], List[Dict[str, Any]]] = defaultdict(list)
+        for row in cohort_enrichment:
+            cohort_by_key[(str(row["latent_strategy"]), int(row["latent_idx"]))].append(row)
+        for key in cohort_by_key:
+            cohort_by_key[key].sort(key=lambda x: (x["enrichment_ratio"], x["prevalence_in_cohort"]), reverse=True)
+
+        metrics_by_idx = {int(row["latent_idx"]): row for row in all_latent_metrics}
+        available = bool(all_latent_metrics or latent_umap or histograms_by_key or analytics_summary)
+        return {
+            "available": available,
+            "analytics_dir": str(analytics_dir) if analytics_dir is not None else "",
+            "plot_manifest": plot_manifest,
+            "summary": analytics_summary,
+            "all_latent_metrics": all_latent_metrics,
+            "metrics_by_idx": metrics_by_idx,
+            "selected_latent_slide_stats": selected_slide_stats,
+            "slide_stats_by_key": slide_stats_by_key,
+            "cohort_enrichment": cohort_enrichment,
+            "cohort_by_key": cohort_by_key,
+            "latent_umap": latent_umap,
+            "histograms_by_key": histograms_by_key,
+            "paths": {
+                "plot_manifest_json": str(plot_manifest_path) if plot_manifest_path is not None else "",
+                "analytics_summary_json": str(analytics_summary_path) if analytics_summary_path is not None else "",
+                "all_latent_metrics_csv": str(all_latent_metrics_csv) if all_latent_metrics_csv is not None else "",
+                "selected_latent_slide_stats_csv": str(selected_latent_slide_stats_csv) if selected_latent_slide_stats_csv is not None else "",
+                "cohort_enrichment_csv": str(cohort_enrichment_csv) if cohort_enrichment_csv is not None else "",
+                "latent_umap_csv": str(latent_umap_csv) if latent_umap_csv is not None else "",
+                "selected_latent_histograms_json": str(histograms_json) if histograms_json is not None else "",
+                "case_label_enrichment_csv": str(case_label_enrichment_csv) if case_label_enrichment_csv is not None and case_label_enrichment_csv.exists() else "",
+            },
+        }
+
     def _dedupe_support_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen: set[tuple[Any, ...]] = set()
         out: List[Dict[str, Any]] = []
@@ -483,6 +746,7 @@ class SaeCache:
         dedup_support_rows = self._dedupe_support_rows(support_rows)
         latent_rows = self._load_latent_summary_rows(latent_summary_csv)
         summary = self._load_json_file(summary_json)
+        analytics = self._build_analytics_data(entry, rep_csv)
         slide_lookup = self._build_slide_lookup(slides_root)
 
         representative_methods: Dict[str, List[Dict[str, Any]]] = {}
@@ -591,6 +855,22 @@ class SaeCache:
         summary["available_representative_methods"] = available_methods
         summary["available_latent_strategies"] = available_strategies
         summary["tile_size"] = tile_size
+        summary["analytics_available"] = bool(analytics.get("available"))
+        analytics_summary = analytics.get("summary", {})
+        if isinstance(analytics_summary, dict):
+            for field in [
+                "total_cases",
+                "total_tiles_seen",
+                "alive_latents",
+                "selected_latent_union",
+                "selected_strategies",
+                "histogram_unit",
+                "hist_bins",
+                "umap_source",
+                "umap_backend",
+            ]:
+                if field in analytics_summary:
+                    summary[field] = analytics_summary[field]
 
         return {
             "config": {
@@ -603,6 +883,14 @@ class SaeCache:
                 "representative_support_tiles_csv": str(support_csv),
                 "latent_summary_csv": str(latent_summary_csv) if latent_summary_csv is not None else "",
                 "bundle_summary_json": str(summary_json) if summary_json is not None else "",
+                "plot_manifest_json": analytics["paths"].get("plot_manifest_json", ""),
+                "analytics_summary_json": analytics["paths"].get("analytics_summary_json", ""),
+                "all_latent_metrics_csv": analytics["paths"].get("all_latent_metrics_csv", ""),
+                "selected_latent_slide_stats_csv": analytics["paths"].get("selected_latent_slide_stats_csv", ""),
+                "cohort_enrichment_csv": analytics["paths"].get("cohort_enrichment_csv", ""),
+                "latent_umap_csv": analytics["paths"].get("latent_umap_csv", ""),
+                "selected_latent_histograms_json": analytics["paths"].get("selected_latent_histograms_json", ""),
+                "case_label_enrichment_csv": analytics["paths"].get("case_label_enrichment_csv", ""),
                 "tile_size": tile_size,
             },
             "summary": summary,
@@ -613,6 +901,7 @@ class SaeCache:
             "slide_summaries": slide_summaries,
             "latent_rows": latent_rows,
             "representative_methods": representative_methods,
+            "analytics": analytics,
         }
 
     def _build_model_data(self, entry: Dict[str, Any]) -> Dict[str, Any]:
@@ -1090,6 +1379,21 @@ class Handler(BaseHTTPRequestHandler):
             "config": model["config"],
         })
 
+    def _sae_analytics(self, qs: Dict[str, List[str]]) -> None:
+        model_id = (qs.get("model_id") or [""])[0]
+        model = SAE_CACHE.get_model(model_id)
+        if not model:
+            self._send_json(404, {"error": f"Unknown model_id: {model_id}"})
+            return
+        analytics = model.get("analytics", {})
+        self._send_json(200, {
+            "available": bool(analytics.get("available")),
+            "summary": analytics.get("summary", {}),
+            "plot_manifest": analytics.get("plot_manifest", {}),
+            "all_latent_metrics": analytics.get("all_latent_metrics", []),
+            "latent_umap": analytics.get("latent_umap", []),
+        })
+
     def _sae_latents(self, qs: Dict[str, List[str]]) -> None:
         model_id = (qs.get("model_id") or [""])[0]
         model = SAE_CACHE.get_model(model_id)
@@ -1248,6 +1552,81 @@ class Handler(BaseHTTPRequestHandler):
             "tile_size": model["summary"].get("tile_size", 256),
         })
 
+    def _sae_latent_detail(self, qs: Dict[str, List[str]]) -> None:
+        model_id = (qs.get("model_id") or [""])[0]
+        latent_idx = self._parse_int(qs, "latent_idx", -1)
+        strategy = (qs.get("strategy") or [""])[0].strip().lower()
+        method = (qs.get("method") or ["max_activation"])[0].strip().lower() or "max_activation"
+
+        model = SAE_CACHE.get_model(model_id)
+        if not model:
+            self._send_json(404, {"error": f"Unknown model_id: {model_id}"})
+            return
+        if latent_idx < 0:
+            self._send_json(400, {"error": "Missing or invalid latent_idx"})
+            return
+
+        rep_rows = [r for r in model.get("representative_rows", []) if int(r.get("latent_idx", -1)) == latent_idx]
+        if strategy:
+            rep_rows = [r for r in rep_rows if str(r.get("latent_strategy", "")).strip().lower() == strategy]
+        if not strategy and rep_rows:
+            strategy = str(rep_rows[0].get("latent_strategy", "")).strip().lower()
+
+        support_rows = [r for r in model.get("support_rows", []) if int(r.get("latent_idx", -1)) == latent_idx]
+        if strategy:
+            support_rows = [r for r in support_rows if str(r.get("latent_strategy", "")).strip().lower() == strategy]
+        support_preview = support_rows
+        if method:
+            method_preview = [r for r in support_rows if str(r.get("representative_method", "")).strip().lower() == method]
+            if method_preview:
+                support_preview = method_preview
+        support_preview = sorted(
+            support_preview,
+            key=lambda x: (x.get("method_rank", 0), -x.get("activation", 0.0), x.get("slide_key", "")),
+        )[:24]
+
+        representatives = sorted(
+            rep_rows,
+            key=lambda x: (str(x.get("representative_method", "")), -x.get("method_score", 0.0)),
+        )
+        summary_row = next(
+            (
+                r for r in model.get("latent_rows", [])
+                if int(r.get("latent_idx", -1)) == latent_idx
+                and (not strategy or str(r.get("latent_strategy", "")).strip().lower() == strategy)
+            ),
+            {},
+        )
+
+        analytics = model.get("analytics", {})
+        metric_row = analytics.get("metrics_by_idx", {}).get(latent_idx, {})
+        hist_row = analytics.get("histograms_by_key", {}).get((strategy, latent_idx), {})
+        cohort_rows = analytics.get("cohort_by_key", {}).get((strategy, latent_idx), [])
+        slide_stats = analytics.get("slide_stats_by_key", {}).get((strategy, latent_idx), [])
+
+        default_slide_key = ""
+        if representatives:
+            matching_method = next((r for r in representatives if str(r.get("representative_method", "")).strip().lower() == method), None)
+            default_slide_key = str((matching_method or representatives[0]).get("slide_key", ""))
+        elif support_preview:
+            default_slide_key = str(support_preview[0].get("slide_key", ""))
+
+        self._send_json(200, {
+            "latent_idx": latent_idx,
+            "strategy": strategy,
+            "method": method,
+            "summary_row": summary_row,
+            "metric_row": metric_row,
+            "representatives": representatives,
+            "support_preview": support_preview,
+            "histogram": hist_row,
+            "cohort_rows": cohort_rows[:24],
+            "slide_stats": slide_stats[:120],
+            "default_slide_key": default_slide_key,
+            "available_methods": sorted({str(r.get("representative_method", "")) for r in rep_rows if str(r.get("representative_method", ""))}),
+            "available_strategies": sorted({str(r.get("latent_strategy", "")) for r in model.get("representative_rows", []) if int(r.get("latent_idx", -1)) == latent_idx and str(r.get("latent_strategy", ""))}),
+        })
+
     def _sae_tile(self, qs: Dict[str, List[str]]) -> None:
         model_id = (qs.get("model_id") or [""])[0]
         slide_key = (qs.get("slide_key") or [""])[0].strip().upper()
@@ -1343,6 +1722,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/sae/summary":
             self._sae_summary(qs)
             return
+        if path == "/api/sae/analytics":
+            self._sae_analytics(qs)
+            return
         if path == "/api/sae/latents":
             self._sae_latents(qs)
             return
@@ -1351,6 +1733,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/sae/representatives":
             self._sae_representatives(qs)
+            return
+        if path == "/api/sae/latent":
+            self._sae_latent_detail(qs)
             return
         if path == "/api/sae/slide":
             self._sae_slide_detail(qs)

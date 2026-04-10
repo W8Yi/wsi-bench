@@ -3,7 +3,7 @@
 Two local websites in one app:
 
 - `/` QC dashboard for slide-feature coverage
-- `/sae` SAE inspector for model stats, representative latent tiles, and per-slide representative tiles
+- `/sae` SAE atlas for model stats, representative latent tiles, plot-ready analytics, and per-slide support evidence
 
 ## Run
 
@@ -80,6 +80,20 @@ Representative bundle fields:
 - `latent_summary_csv` (optional)
 - `bundle_summary_json` (optional)
 
+Optional analytics fields:
+
+- `plot_manifest_json`
+- `analytics_summary_json`
+- `all_latent_metrics_csv`
+- `selected_latent_slide_stats_csv`
+- `cohort_enrichment_csv`
+- `latent_umap_csv`
+- `selected_latent_histograms_json`
+- `case_label_enrichment_csv` (optional)
+
+If these analytics paths are not listed explicitly, `wsi-bench` will automatically look for a sibling
+`analytics_<split>/` directory next to the representative bundle and use it when present.
+
 Legacy prototype bundle fields:
 
 - `prototype_tiles_csv`
@@ -89,8 +103,10 @@ Legacy prototype bundle fields:
 
 - `GET /api/sae/models`
 - `GET /api/sae/summary?model_id=...`
+- `GET /api/sae/analytics?model_id=...`
 - `GET /api/sae/latents?model_id=...&group=...&limit=...`
 - `GET /api/sae/representatives?model_id=...&method=max_activation&strategy=top_activation&group=...&limit=...`
+- `GET /api/sae/latent?model_id=...&latent_idx=...&strategy=top_activation&method=max_activation`
 - `GET /api/sae/slides?model_id=...&q=...&limit=...`
 - `GET /api/sae/slide?model_id=...&slide_key=...&method=max_activation&strategy=top_activation`
 - `GET /api/sae/tile?model_id=...&slide_key=...&x=...&y=...&size=...&tile_index=...`
