@@ -99,6 +99,13 @@ body {
   color: var(--muted);
 }
 
+.hero-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 .top-nav {
   display: flex;
   gap: 10px;
@@ -328,6 +335,13 @@ button:hover {
   gap: 10px;
 }
 
+.focus-narrative {
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #626a6c;
+}
+
 .meta-pill,
 .badge {
   display: inline-flex;
@@ -436,6 +450,50 @@ button:hover {
   padding: 14px 16px 18px;
   display: grid;
   gap: 12px;
+}
+
+.contact-sheet-wrap,
+.support-preview {
+  padding: 14px 16px 18px;
+}
+
+.contact-sheet-card {
+  display: grid;
+  gap: 10px;
+}
+
+.contact-sheet-card img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 14px;
+  border: 1px solid rgba(121, 111, 91, 0.12);
+  background: rgba(255,255,255,0.72);
+}
+
+.support-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.support-preview-card {
+  display: grid;
+  gap: 6px;
+}
+
+.support-preview-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+  background: #ebe7de;
+}
+
+.support-preview-card div {
+  font-size: 0.78rem;
+  color: #555c5f;
 }
 
 .method-card {
@@ -663,7 +721,8 @@ tbody tr.is-current td {
   }
 
   .rep-card,
-  .method-card {
+  .method-card,
+  .support-preview-grid {
     grid-template-columns: 1fr;
   }
 }

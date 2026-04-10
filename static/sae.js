@@ -37,7 +37,9 @@ const el = {
   toggleTechBtn: document.getElementById("toggleTechBtn"),
   modelHeading: document.getElementById("modelHeading"),
   modelNarrative: document.getElementById("modelNarrative"),
+  heroMetrics: document.getElementById("heroMetrics"),
   focusMeta: document.getElementById("focusMeta"),
+  focusNarrative: document.getElementById("focusNarrative"),
   prevalenceCanvas: document.getElementById("prevalenceCanvas"),
   umapCanvas: document.getElementById("umapCanvas"),
   histCanvas: document.getElementById("histCanvas"),
@@ -45,6 +47,8 @@ const el = {
   umapMeta: document.getElementById("umapMeta"),
   latentProfile: document.getElementById("latentProfile"),
   methodStrip: document.getElementById("methodStrip"),
+  contactSheetWrap: document.getElementById("contactSheetWrap"),
+  supportPreview: document.getElementById("supportPreview"),
   cohortRows: document.getElementById("cohortRows"),
 };
 
@@ -132,6 +136,14 @@ function renderSummary(summary, config, analyticsSummary) {
     ? `Analytics include prevalence, latent geometry, cohort enrichment, and slide-max histograms.`
     : `Analytics bundle not loaded yet, so this view falls back to representative tiles and slide detail only.`;
   el.modelNarrative.textContent = `${splitText}${analyticsText}`;
+  const heroPills = [
+    `encoder ${summary.encoder || "-"}`,
+    `${summary.total_slides || 0} slides`,
+    `${analyticsSummary.total_cases || summary.total_cases || 0} cases`,
+    `${analyticsSummary.selected_latent_union || 0} selected latents`,
+    state.analytics.available ? `${analyticsSummary.umap_backend || "analytics"} geometry` : "representative-only fallback",
+  ];
+  el.heroMetrics.innerHTML = heroPills.map((text) => `<span class="meta-pill">${esc(text)}</span>`).join("");
 }
 
 function renderRepresentativeMethodSelect(methods) {
@@ -221,6 +233,7 @@ function currentRepresentativeForFocus() {
 function renderFocusMeta() {
   if (state.selectedLatentIdx === null) {
     el.focusMeta.innerHTML = `<span class="meta-pill">No latent selected</span>`;
+    el.focusNarrative.textContent = "Select a latent from the gallery or click a point in the analytics plots to align every panel around one concept.";
     return;
   }
   const rep = currentRepresentativeForFocus();
@@ -230,6 +243,9 @@ function renderFocusMeta() {
   ];
   if (rep?.slide_key) pills.push(`<span class="meta-pill">${esc(rep.slide_key)}</span>`);
   el.focusMeta.innerHTML = pills.join("");
+  el.focusNarrative.textContent = rep
+    ? `Viewing ${rep.representative_method || "representative"} evidence for latent ${state.selectedLatentIdx} under ${state.selectedLatentStrategy || "its current strategy"}.`
+    : `Viewing latent ${state.selectedLatentIdx}.`;
 }
 
 function renderRepresentatives() {
@@ -441,6 +457,16 @@ function drawHistogram(hist) {
   ctx.fillText(hist.histogram_unit || "slide_max_activation", margin.left, height - 8);
 }
 
+function contactSheetUrl(detail) {
+  return `/api/sae/contact-sheet?${q({
+    model_id: state.selectedModelId,
+    latent_idx: detail.latent_idx,
+    strategy: detail.strategy,
+    method: detail.method || state.representativeMethod,
+    size: 768,
+  })}`;
+}
+
 function renderLatentProfile(detail) {
   const metric = detail.metric_row || {};
   const summary = detail.summary_row || {};
@@ -478,6 +504,34 @@ function renderLatentProfile(detail) {
 
   drawHistogram(detail.histogram || {});
   renderCohortTable(detail.cohort_rows || []);
+
+  if (detail.contact_sheet_available) {
+    el.contactSheetWrap.innerHTML = `
+      <div class="contact-sheet-card">
+        <img loading="lazy" src="${contactSheetUrl(detail)}" alt="contact sheet for latent ${esc(detail.latent_idx)}" />
+        <div class="meta">Materialized contact sheet for ${esc(detail.strategy || "-")} • ${esc(detail.method || state.representativeMethod || "-")}.</div>
+      </div>
+    `;
+  } else {
+    el.contactSheetWrap.innerHTML = `<p class="meta">No configured materialized contact sheet for this latent.</p>`;
+  }
+
+  const preview = detail.support_preview || [];
+  if (!preview.length) {
+    el.supportPreview.innerHTML = `<p class="meta">No support preview rows available for this latent.</p>`;
+  } else {
+    el.supportPreview.innerHTML = `
+      <div class="support-preview-grid">
+        ${preview.slice(0, 6).map((row) => `
+          <article class="support-preview-card">
+            <img loading="lazy" src="${tileUrl(row, row.slide_key, 144)}" alt="support preview tile" />
+            <div>${esc(row.slide_key || "-")}</div>
+            <div>act ${Number(row.activation || 0).toFixed(3)}</div>
+          </article>
+        `).join("")}
+      </div>
+    `;
+  }
 }
 
 function renderCohortTable(rows) {
@@ -575,6 +629,8 @@ async function loadFocusData() {
   if (state.selectedLatentIdx === null) {
     el.latentProfile.innerHTML = `<p class="meta">Select a representative latent tile or chart point to inspect latent-specific analytics.</p>`;
     el.methodStrip.innerHTML = `<p class="meta">Representative methods will appear here for the selected latent.</p>`;
+    el.contactSheetWrap.innerHTML = `<p class="meta">If a local materialized contact sheet is configured, it will appear here.</p>`;
+    el.supportPreview.innerHTML = `<p class="meta">Top support tiles for the selected latent will appear here.</p>`;
     renderCohortTable([]);
     drawEmptyCanvas(el.histCanvas, "No latent selected.");
     renderDetailPlaceholder("Select a representative latent tile to inspect its slide-level support tiles.");
@@ -621,6 +677,10 @@ async function loadModelData() {
   }
 
   try {
+    el.summary.innerHTML = `<div class="metric"><strong>Loading</strong><span>Refreshing atlas…</span></div>`;
+    el.modelHeading.textContent = "Loading SAE atlas…";
+    el.modelNarrative.textContent = "Refreshing representative tiles and analytics for the selected model.";
+    el.heroMetrics.innerHTML = `<span class="meta-pill">Loading model context</span>`;
     const [summaryData, repData, analyticsData] = await Promise.all([
       fetchJson(`/api/sae/summary?${q({ model_id: state.selectedModelId })}`),
       fetchJson(`/api/sae/representatives?${q({
@@ -660,6 +720,7 @@ async function loadModelData() {
     await loadFocusData();
   } catch (err) {
     el.summary.innerHTML = `<div class="metric"><strong>Error</strong><span>${esc(err.message)}</span></div>`;
+    el.heroMetrics.innerHTML = `<span class="meta-pill">Load failed</span>`;
     renderDetailPlaceholder("Failed to load model data.");
     drawEmptyCanvas(el.prevalenceCanvas, "Failed to load analytics.");
     drawEmptyCanvas(el.umapCanvas, "Failed to load analytics.");
@@ -681,6 +742,7 @@ async function loadBootstrap() {
     await loadModelData();
   } catch (err) {
     el.summary.innerHTML = `<div class="metric"><strong>Error</strong><span>${esc(err.message)}</span></div>`;
+    el.heroMetrics.innerHTML = `<span class="meta-pill">Initialization failed</span>`;
     renderDetailPlaceholder("Failed to initialize SAE models.");
     drawEmptyCanvas(el.prevalenceCanvas, "Failed to initialize analytics.");
     drawEmptyCanvas(el.umapCanvas, "Failed to initialize analytics.");

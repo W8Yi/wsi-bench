@@ -372,6 +372,12 @@ class SaeCache:
         except Exception:
             return {}
 
+    def _resolve_optional_path(self, raw: str) -> Optional[Path]:
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        return self._resolve_path(text)
+
     def _infer_analytics_dir(self, entry: Dict[str, Any], rep_csv: Path) -> Optional[Path]:
         raw = str(entry.get("analytics_dir", "")).strip()
         if raw:
@@ -596,6 +602,61 @@ class SaeCache:
             }
         return out
 
+    def _load_materialized_rows(self, csv_path: Optional[Path]) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        if csv_path is None or not csv_path.exists():
+            return rows
+        with csv_path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                slide_key = (r.get("slide_key") or "").strip().upper()
+                tile_path = (r.get("tile_image_path") or r.get("tile_path") or "").strip()
+                if not slide_key or not tile_path:
+                    continue
+                rows.append({
+                    "latent_strategy": r.get("latent_strategy") or "",
+                    "latent_idx": _to_int(r.get("latent_idx"), -1),
+                    "representative_method": r.get("representative_method") or "",
+                    "slide_key": slide_key,
+                    "tile_index": _to_int(r.get("tile_index"), -1),
+                    "coord_x": _to_int(r.get("coord_x"), 0),
+                    "coord_y": _to_int(r.get("coord_y"), 0),
+                    "tile_image_path": tile_path,
+                    "status": r.get("status") or "",
+                    "row_kind": r.get("row_kind") or "",
+                })
+        return rows
+
+    def _build_materialized_tile_lookup(self, rows: List[Dict[str, Any]]) -> Dict[tuple[str, int, int, int], str]:
+        lookup: Dict[tuple[str, int, int, int], str] = {}
+        for row in rows:
+            tile_path = str(row.get("tile_image_path", "")).strip()
+            if not tile_path:
+                continue
+            key = (
+                str(row.get("slide_key", "")),
+                _to_int(row.get("tile_index"), -1),
+                _to_int(row.get("coord_x"), 0),
+                _to_int(row.get("coord_y"), 0),
+            )
+            lookup.setdefault(key, tile_path)
+        return lookup
+
+    def _load_contact_sheet_lookup(self, root: Optional[Path]) -> Dict[tuple[str, int, str], str]:
+        lookup: Dict[tuple[str, int, str], str] = {}
+        if root is None or not root.exists():
+            return lookup
+        pattern = re.compile(r"(.+)__latent_(\d+)__(.+)\.(png|jpg|jpeg)$", re.IGNORECASE)
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            m = pattern.match(path.name)
+            if not m:
+                continue
+            strategy, latent_idx, method, _ext = m.groups()
+            lookup[(strategy, int(latent_idx), method)] = str(path)
+        return lookup
+
     def _build_analytics_data(self, entry: Dict[str, Any], rep_csv: Path) -> Dict[str, Any]:
         analytics_dir = self._infer_analytics_dir(entry, rep_csv)
         plot_manifest_path = None
@@ -740,6 +801,8 @@ class SaeCache:
         summary_json_raw = str(entry.get("bundle_summary_json", "")).strip()
         latent_summary_csv = self._resolve_path(latent_summary_csv_raw) if latent_summary_csv_raw else None
         summary_json = self._resolve_path(summary_json_raw) if summary_json_raw else None
+        materialized_rows_csv = self._resolve_optional_path(str(entry.get("materialized_rows_csv", "")))
+        materialized_contact_sheets_dir = self._resolve_optional_path(str(entry.get("materialized_contact_sheets_dir", "")))
 
         representative_rows = self._load_representative_rows(rep_csv)
         support_rows = self._load_representative_rows(support_csv)
@@ -748,6 +811,19 @@ class SaeCache:
         summary = self._load_json_file(summary_json)
         analytics = self._build_analytics_data(entry, rep_csv)
         slide_lookup = self._build_slide_lookup(slides_root)
+        materialized_rows = self._load_materialized_rows(materialized_rows_csv)
+        materialized_tile_lookup = self._build_materialized_tile_lookup(materialized_rows)
+        contact_sheet_lookup = self._load_contact_sheet_lookup(materialized_contact_sheets_dir)
+
+        for collection in [representative_rows, support_rows]:
+            for row in collection:
+                key = (
+                    str(row.get("slide_key", "")),
+                    _to_int(row.get("tile_index"), -1),
+                    _to_int(row.get("coord_x"), 0),
+                    _to_int(row.get("coord_y"), 0),
+                )
+                row["materialized_tile_path"] = materialized_tile_lookup.get(key, "")
 
         representative_methods: Dict[str, List[Dict[str, Any]]] = {}
         available_methods = sorted({str(r.get("representative_method", "")) for r in representative_rows if str(r.get("representative_method", ""))})
@@ -856,6 +932,8 @@ class SaeCache:
         summary["available_latent_strategies"] = available_strategies
         summary["tile_size"] = tile_size
         summary["analytics_available"] = bool(analytics.get("available"))
+        summary["materialized_tiles_available"] = bool(materialized_tile_lookup)
+        summary["materialized_contact_sheets_available"] = bool(contact_sheet_lookup)
         analytics_summary = analytics.get("summary", {})
         if isinstance(analytics_summary, dict):
             for field in [
@@ -883,6 +961,8 @@ class SaeCache:
                 "representative_support_tiles_csv": str(support_csv),
                 "latent_summary_csv": str(latent_summary_csv) if latent_summary_csv is not None else "",
                 "bundle_summary_json": str(summary_json) if summary_json is not None else "",
+                "materialized_rows_csv": str(materialized_rows_csv) if materialized_rows_csv is not None else "",
+                "materialized_contact_sheets_dir": str(materialized_contact_sheets_dir) if materialized_contact_sheets_dir is not None else "",
                 "plot_manifest_json": analytics["paths"].get("plot_manifest_json", ""),
                 "analytics_summary_json": analytics["paths"].get("analytics_summary_json", ""),
                 "all_latent_metrics_csv": analytics["paths"].get("all_latent_metrics_csv", ""),
@@ -902,6 +982,9 @@ class SaeCache:
             "latent_rows": latent_rows,
             "representative_methods": representative_methods,
             "analytics": analytics,
+            "materialized_rows": materialized_rows,
+            "materialized_tile_lookup": materialized_tile_lookup,
+            "contact_sheet_lookup": contact_sheet_lookup,
         }
 
     def _build_model_data(self, entry: Dict[str, Any]) -> Dict[str, Any]:
@@ -1271,6 +1354,16 @@ def render_sae_tile(slide_path: Path, x: int, y: int, size: int) -> bytes:
         return image_to_jpeg_bytes(region)
 
 
+def render_saved_image(path: Path, size: int) -> bytes:
+    if Image is None:
+        raise RuntimeError("Pillow is required to load saved tile images.")
+    with Image.open(path) as img:
+        img = img.convert("RGB")
+        if img.size != (size, size):
+            img = img.resize((size, size))
+        return image_to_jpeg_bytes(img)
+
+
 def _thumb_worker(slide_path_str: str, size: int, queue: Queue) -> None:
     try:
         queue.put(("ok", render_thumbnail(Path(slide_path_str), size)))
@@ -1603,6 +1696,7 @@ class Handler(BaseHTTPRequestHandler):
         hist_row = analytics.get("histograms_by_key", {}).get((strategy, latent_idx), {})
         cohort_rows = analytics.get("cohort_by_key", {}).get((strategy, latent_idx), [])
         slide_stats = analytics.get("slide_stats_by_key", {}).get((strategy, latent_idx), [])
+        contact_sheet_path = model.get("contact_sheet_lookup", {}).get((strategy, latent_idx, method), "")
 
         default_slide_key = ""
         if representatives:
@@ -1623,9 +1717,42 @@ class Handler(BaseHTTPRequestHandler):
             "cohort_rows": cohort_rows[:24],
             "slide_stats": slide_stats[:120],
             "default_slide_key": default_slide_key,
+            "contact_sheet_available": bool(contact_sheet_path),
             "available_methods": sorted({str(r.get("representative_method", "")) for r in rep_rows if str(r.get("representative_method", ""))}),
             "available_strategies": sorted({str(r.get("latent_strategy", "")) for r in model.get("representative_rows", []) if int(r.get("latent_idx", -1)) == latent_idx and str(r.get("latent_strategy", ""))}),
         })
+
+    def _sae_contact_sheet(self, qs: Dict[str, List[str]]) -> None:
+        model_id = (qs.get("model_id") or [""])[0]
+        latent_idx = self._parse_int(qs, "latent_idx", -1)
+        strategy = (qs.get("strategy") or [""])[0].strip()
+        method = (qs.get("method") or ["max_activation"])[0].strip() or "max_activation"
+        size = parse_size((qs.get("size") or ["512"])[0])
+
+        model = SAE_CACHE.get_model(model_id)
+        if not model:
+            self._send_json(404, {"error": f"Unknown model_id: {model_id}"})
+            return
+        if latent_idx < 0 or not strategy:
+            self._send_json(400, {"error": "Missing latent_idx or strategy"})
+            return
+
+        sheet_path = model.get("contact_sheet_lookup", {}).get((strategy, latent_idx, method), "")
+        if not sheet_path:
+            blob = placeholder_jpeg(size, "Contact sheet unavailable", f"latent {latent_idx} • {strategy}")
+            self._send(200, blob if blob else b"", "image/jpeg")
+            return
+        src = Path(sheet_path)
+        if not src.exists():
+            blob = placeholder_jpeg(size, "Contact sheet missing", src.name)
+            self._send(200, blob if blob else b"", "image/jpeg")
+            return
+        try:
+            blob = render_saved_image(src, size)
+            self._send(200, blob, "image/jpeg")
+        except Exception as e:
+            blob = placeholder_jpeg(size, "Contact sheet error", f"{type(e).__name__}: {src.name}")
+            self._send(200, blob if blob else b"", "image/jpeg")
 
     def _sae_tile(self, qs: Dict[str, List[str]]) -> None:
         model_id = (qs.get("model_id") or [""])[0]
@@ -1642,6 +1769,17 @@ class Handler(BaseHTTPRequestHandler):
         if not slide_key:
             self._send_json(400, {"error": "Missing slide_key"})
             return
+
+        materialized_path = model.get("materialized_tile_lookup", {}).get((slide_key, tile_index, x, y), "")
+        if materialized_path:
+            src = Path(materialized_path)
+            if src.exists():
+                try:
+                    blob = render_saved_image(src, size)
+                    self._send(200, blob, "image/jpeg")
+                    return
+                except Exception:
+                    pass
 
         slide_path = model["slide_lookup"].get(slide_key)
         if not slide_path:
@@ -1736,6 +1874,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/sae/latent":
             self._sae_latent_detail(qs)
+            return
+        if path == "/api/sae/contact-sheet":
+            self._sae_contact_sheet(qs)
             return
         if path == "/api/sae/slide":
             self._sae_slide_detail(qs)

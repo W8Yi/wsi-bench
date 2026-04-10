@@ -91,8 +91,17 @@ Optional analytics fields:
 - `selected_latent_histograms_json`
 - `case_label_enrichment_csv` (optional)
 
+Optional materialized-output fields:
+
+- `materialized_rows_csv`
+- `materialized_contact_sheets_dir`
+
 If these analytics paths are not listed explicitly, `wsi-bench` will automatically look for a sibling
 `analytics_<split>/` directory next to the representative bundle and use it when present.
+
+If `materialized_rows_csv` is present, `wsi-bench` will prefer saved local tile images before falling back to on-demand
+tile rendering from `slides_root`. If `materialized_contact_sheets_dir` is present, the SAE atlas will also show saved
+contact sheets in latent detail.
 
 Legacy prototype bundle fields:
 
@@ -107,6 +116,7 @@ Legacy prototype bundle fields:
 - `GET /api/sae/latents?model_id=...&group=...&limit=...`
 - `GET /api/sae/representatives?model_id=...&method=max_activation&strategy=top_activation&group=...&limit=...`
 - `GET /api/sae/latent?model_id=...&latent_idx=...&strategy=top_activation&method=max_activation`
+- `GET /api/sae/contact-sheet?model_id=...&latent_idx=...&strategy=top_activation&method=max_activation&size=768`
 - `GET /api/sae/slides?model_id=...&q=...&limit=...`
 - `GET /api/sae/slide?model_id=...&slide_key=...&method=max_activation&strategy=top_activation`
 - `GET /api/sae/tile?model_id=...&slide_key=...&x=...&y=...&size=...&tile_index=...`
