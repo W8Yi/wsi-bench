@@ -10,12 +10,9 @@
   <div class="page-shell">
     <header class="hero">
       <div class="hero-copy">
-        <div class="eyebrow">WSI Bench • Sparse Autoencoder Atlas</div>
-        <h1>Representative Latents, Cohort Signals, and Slide Evidence</h1>
-        <p>
-          Explore SAE concept structure as a publication-style atlas: global latent geometry, prevalence,
-          cohort enrichment, representative evidence, and slide-local support tiles in one place.
-        </p>
+        <div class="eyebrow">WSI Bench</div>
+        <h1>Latent Atlas</h1>
+        <p>Inspect one latent at a time across profile, analytics, cohorts, and slide evidence.</p>
         <div id="heroMetrics" class="hero-metrics">
           <span class="meta-pill">Loading model context</span>
         </div>
@@ -33,34 +30,34 @@
           <select id="encoderSelect"></select>
         </div>
         <div class="control">
-          <label for="modelSelect">SAE Model</label>
+          <label for="modelSelect">Model</label>
           <select id="modelSelect"></select>
         </div>
         <div class="control">
-          <label for="repStrategySelect">Latent Strategy</label>
+          <label for="repStrategySelect">Strategy</label>
           <select id="repStrategySelect">
             <option value="">All strategies</option>
           </select>
         </div>
         <div class="control">
-          <label for="repMethodSelect">Representative Method</label>
+          <label for="repMethodSelect">Method</label>
           <select id="repMethodSelect">
             <option value="max_activation">max activation</option>
           </select>
         </div>
         <div class="control">
-          <label for="latentGroupSelect">Latent Group</label>
+          <label for="latentGroupSelect">Group</label>
           <select id="latentGroupSelect">
             <option value="">All groups</option>
           </select>
         </div>
         <div class="control grow">
           <label for="repSearch">Search</label>
-          <input id="repSearch" type="text" placeholder="latent id, slide key, case id, or strategy" />
+          <input id="repSearch" type="text" placeholder="latent, slide, case, or strategy" />
         </div>
         <div class="control compact">
           <label>&nbsp;</label>
-          <button id="clearLatentBtn" type="button" class="ghost">Clear focus</button>
+          <button id="clearLatentBtn" type="button" class="ghost">Clear</button>
         </div>
         <div class="control compact">
           <label>&nbsp;</label>
@@ -70,135 +67,127 @@
 
       <section class="summary-grid" id="summary"></section>
 
-      <section class="content-grid">
-        <section class="main-column">
-          <article class="panel intro-panel">
+      <section class="workspace-grid">
+        <article class="panel focus-panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-kicker">Focused latent</div>
+              <h2 id="modelHeading">Loading atlas…</h2>
+            </div>
+            <div class="panel-meta">Profile-first workspace</div>
+          </div>
+
+          <div class="focus-header">
+            <div class="focus-note">
+              <div class="mini-head">Context</div>
+              <p id="modelNarrative" class="lede">
+                Load a representative bundle to inspect one latent at a time across profile, analytics, and evidence.
+              </p>
+            </div>
+            <div class="focus-note focus-note-strong">
+              <div class="mini-head">Current focus</div>
+              <div id="focusMeta" class="focus-meta">
+                <span class="meta-pill">No latent selected</span>
+              </div>
+              <p id="focusNarrative" class="focus-narrative">
+                Select a latent from the gallery or analytics view to center the workspace on it.
+              </p>
+            </div>
+          </div>
+
+          <div id="latentProfile" class="profile-body">
+            <p class="meta">Select a representative latent tile or chart point to inspect latent-specific analytics.</p>
+          </div>
+
+          <div class="profile-subgrid">
+            <div class="mini-panel">
+              <div class="mini-head">Activation Histogram</div>
+              <canvas id="histCanvas" width="520" height="220"></canvas>
+            </div>
+            <div class="mini-panel">
+              <div class="mini-head">Representative Methods</div>
+              <div id="methodStrip" class="method-strip">
+                <p class="meta">Representative methods will appear here for the selected latent.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-subgrid">
+            <div class="mini-panel">
+              <div class="mini-head">Support Preview</div>
+              <div id="supportPreview" class="support-preview">
+                <p class="meta">Top support tiles for the selected latent will appear here.</p>
+              </div>
+            </div>
+            <div class="mini-panel">
+              <div class="mini-head">Contact Sheet</div>
+              <div id="contactSheetWrap" class="contact-sheet-wrap">
+                <p class="meta">If a local materialized contact sheet is configured, it will appear here.</p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <section class="analytics-column">
+          <article class="panel plot-panel">
             <div class="panel-head">
               <div>
-                <div class="panel-kicker">Model context</div>
-                <h2 id="modelHeading">Loading SAE atlas…</h2>
+                <div class="panel-kicker">Analytics</div>
+                <h2>Prevalence</h2>
               </div>
+              <div class="panel-meta" id="scatterMeta">Select a point or representative tile</div>
             </div>
-            <div class="intro-grid">
-              <div class="intro-note">
-                <h3>Interpretation frame</h3>
-                <p id="modelNarrative" class="lede">
-                  Load a representative bundle to compare latent coverage, activation strength, cohort specificity,
-                  and the actual support tiles that justify each concept.
-                </p>
-              </div>
-              <div class="intro-note">
-                <h3>Current focus</h3>
-                <div id="focusMeta" class="focus-meta">
-                  <span class="meta-pill">No latent selected</span>
-                </div>
-                <p id="focusNarrative" class="focus-narrative">
-                  The selected latent will synchronize the gallery, analytics plots, cohort enrichment, and slide evidence panels.
-                </p>
-              </div>
-            </div>
+            <canvas id="prevalenceCanvas" width="760" height="360"></canvas>
+            <p class="panel-caption">
+              Each point is a latent. X shows slide prevalence across the export split. Y shows mean positive activation.
+            </p>
           </article>
 
-          <section class="plot-grid">
-            <article class="panel plot-panel">
-              <div class="panel-head">
-                <div>
-                  <div class="panel-kicker">Global view</div>
-                  <h2>Prevalence vs Activation</h2>
-                </div>
-                <div class="panel-meta" id="scatterMeta">Select a point or representative tile</div>
+          <article class="panel plot-panel">
+            <div class="panel-head">
+              <div>
+                <div class="panel-kicker">Analytics</div>
+                <h2>Geometry</h2>
               </div>
-              <canvas id="prevalenceCanvas" width="760" height="360"></canvas>
-              <p class="panel-caption">
-                Each point is a latent. X shows slide prevalence across the export split; Y shows mean positive activation.
-                Selected representative latents are emphasized.
-              </p>
-            </article>
+              <div class="panel-meta" id="umapMeta">Decoder-vector map</div>
+            </div>
+            <canvas id="umapCanvas" width="760" height="360"></canvas>
+            <p class="panel-caption">
+              UMAP of decoder vectors for alive latents. Click a point to move the workspace to that latent.
+            </p>
+          </article>
+        </section>
 
-            <article class="panel plot-panel">
-              <div class="panel-head">
-                <div>
-                  <div class="panel-kicker">Global view</div>
-                  <h2>Latent Geometry</h2>
-                </div>
-                <div class="panel-meta" id="umapMeta">Decoder-vector map</div>
+        <section class="evidence-column">
+          <article class="panel cohort-panel">
+            <div class="panel-head">
+              <div>
+                <div class="panel-kicker">Selected latent</div>
+                <h2>Cohorts</h2>
               </div>
-              <canvas id="umapCanvas" width="760" height="360"></canvas>
-              <p class="panel-caption">
-                UMAP of decoder vectors for alive latents. Click to jump into a latent and compare how it sits within the broader dictionary.
-              </p>
-            </article>
-          </section>
-
-          <section class="detail-grid">
-            <article class="panel detail-panel">
-              <div class="panel-head">
-                <div>
-                  <div class="panel-kicker">Selected latent</div>
-                  <h2>Latent Profile</h2>
-                </div>
-              </div>
-              <div id="latentProfile" class="profile-body">
-                <p class="meta">Select a representative latent tile or chart point to inspect latent-specific analytics.</p>
-              </div>
-              <div class="profile-subgrid">
-                <div class="mini-panel">
-                  <div class="mini-head">Activation Histogram</div>
-                  <canvas id="histCanvas" width="520" height="220"></canvas>
-                </div>
-                <div class="mini-panel">
-                  <div class="mini-head">Method Comparison</div>
-                  <div id="methodStrip" class="method-strip">
-                    <p class="meta">Representative methods will appear here for the selected latent.</p>
-                  </div>
-                </div>
-              </div>
-              <div class="profile-subgrid">
-                <div class="mini-panel">
-                  <div class="mini-head">Materialized Contact Sheet</div>
-                  <div id="contactSheetWrap" class="contact-sheet-wrap">
-                    <p class="meta">If a local materialized contact sheet is configured, it will appear here.</p>
-                  </div>
-                </div>
-                <div class="mini-panel">
-                  <div class="mini-head">Support Preview</div>
-                  <div id="supportPreview" class="support-preview">
-                    <p class="meta">Top support tiles for the selected latent will appear here.</p>
-                  </div>
-                </div>
-              </div>
-            </article>
-
-            <article class="panel cohort-panel">
-              <div class="panel-head">
-                <div>
-                  <div class="panel-kicker">Selected latent</div>
-                  <h2>Cohort Enrichment</h2>
-                </div>
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Cohort</th>
-                      <th>Enrichment</th>
-                      <th>Prevalence</th>
-                      <th>Slides</th>
-                    </tr>
-                  </thead>
-                  <tbody id="cohortRows">
-                    <tr><td colspan="4" class="meta">Analytics bundle not loaded.</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </article>
-          </section>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cohort</th>
+                    <th>Enrichment</th>
+                    <th>Prevalence</th>
+                    <th>Slides</th>
+                  </tr>
+                </thead>
+                <tbody id="cohortRows">
+                  <tr><td colspan="4" class="meta">Analytics bundle not loaded.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
 
           <article class="panel slide-panel">
             <div class="panel-head">
               <div>
-                <div class="panel-kicker">Slide-level evidence</div>
-                <h2>Support Tiles and Slide Detail</h2>
+                <div class="panel-kicker">Evidence</div>
+                <h2>Slide Detail</h2>
               </div>
               <div class="panel-actions">
                 <button id="toggleTechBtn" type="button" class="ghost">Show technical</button>
@@ -209,20 +198,18 @@
             </div>
           </article>
         </section>
-
-        <aside class="rail">
-          <article class="panel rail-panel">
-            <div class="panel-head sticky">
-              <div>
-                <div class="panel-kicker">Representative evidence</div>
-                <h2>Latent Gallery</h2>
-              </div>
-              <div class="panel-meta" id="repMeta"></div>
-            </div>
-            <div id="repCards" class="rep-gallery"></div>
-          </article>
-        </aside>
       </section>
+
+      <article class="panel gallery-panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-kicker">Choose latent</div>
+            <h2>Representative Latents</h2>
+          </div>
+          <div class="panel-meta" id="repMeta"></div>
+        </div>
+        <div id="repCards" class="rep-gallery"></div>
+      </article>
     </main>
   </div>
 

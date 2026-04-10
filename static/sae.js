@@ -121,27 +121,27 @@ function renderSummary(summary, config, analyticsSummary) {
     ["Slides", summary.total_slides || 0],
     ["Cases", analyticsSummary.total_cases || summary.total_cases || 0],
     ["Alive latents", analyticsSummary.alive_latents || 0],
-    ["Representative rows", summary.total_representative_rows || 0],
-    ["Support rows", summary.total_support_rows || 0],
+    ["Representatives", summary.total_representative_rows || 0],
+    ["Support tiles", summary.total_support_rows || 0],
     ["Selected union", analyticsSummary.selected_latent_union || 0],
-    ["Rep slide coverage", `${Number(summary.rep_slide_coverage || 0).toFixed(1)}%`],
-    ["Median activation", Number(summary.activation_p50 || 0).toFixed(3)],
+    ["Slide coverage", `${Number(summary.rep_slide_coverage || 0).toFixed(1)}%`],
+    ["Median act", Number(summary.activation_p50 || 0).toFixed(3)],
     ["Tail ratio", Number(summary.activation_tail_ratio || 0).toFixed(3)],
   ];
   el.summary.innerHTML = chips.map(([k, v]) => `<div class="metric"><strong>${esc(k)}</strong><span>${esc(v)}</span></div>`).join("");
 
-  el.modelHeading.textContent = summary.model_name || config.model_name || "SAE Atlas";
-  const splitText = analyticsSummary.split ? `The current atlas is built on the ${analyticsSummary.split} split. ` : "";
+  el.modelHeading.textContent = summary.model_name || config.model_name || "Latent Atlas";
+  const splitText = analyticsSummary.split ? `Built on the ${analyticsSummary.split} split. ` : "";
   const analyticsText = state.analytics.available
-    ? `Analytics include prevalence, latent geometry, cohort enrichment, and slide-max histograms.`
-    : `Analytics bundle not loaded yet, so this view falls back to representative tiles and slide detail only.`;
+    ? `Focus one latent at a time across prevalence, geometry, cohorts, and evidence.`
+    : `Analytics are unavailable, so this view falls back to representatives and slide detail.`;
   el.modelNarrative.textContent = `${splitText}${analyticsText}`;
   const heroPills = [
-    `encoder ${summary.encoder || "-"}`,
+    `${summary.encoder || "-"} encoder`,
     `${summary.total_slides || 0} slides`,
     `${analyticsSummary.total_cases || summary.total_cases || 0} cases`,
     `${analyticsSummary.selected_latent_union || 0} selected latents`,
-    state.analytics.available ? `${analyticsSummary.umap_backend || "analytics"} geometry` : "representative-only fallback",
+    state.analytics.available ? `${analyticsSummary.umap_backend || "analytics"} geometry` : "representative fallback",
   ];
   el.heroMetrics.innerHTML = heroPills.map((text) => `<span class="meta-pill">${esc(text)}</span>`).join("");
 }
@@ -233,7 +233,7 @@ function currentRepresentativeForFocus() {
 function renderFocusMeta() {
   if (state.selectedLatentIdx === null) {
     el.focusMeta.innerHTML = `<span class="meta-pill">No latent selected</span>`;
-    el.focusNarrative.textContent = "Select a latent from the gallery or click a point in the analytics plots to align every panel around one concept.";
+    el.focusNarrative.textContent = "Choose a latent from the gallery or analytics view to center the page on it.";
     return;
   }
   const rep = currentRepresentativeForFocus();
@@ -244,7 +244,7 @@ function renderFocusMeta() {
   if (rep?.slide_key) pills.push(`<span class="meta-pill">${esc(rep.slide_key)}</span>`);
   el.focusMeta.innerHTML = pills.join("");
   el.focusNarrative.textContent = rep
-    ? `Viewing ${rep.representative_method || "representative"} evidence for latent ${state.selectedLatentIdx} under ${state.selectedLatentStrategy || "its current strategy"}.`
+    ? `Viewing ${String(rep.representative_method || "representative").replaceAll("_", " ")} evidence for latent ${state.selectedLatentIdx}.`
     : `Viewing latent ${state.selectedLatentIdx}.`;
 }
 
@@ -299,10 +299,10 @@ function resizeCanvas(canvas) {
 function drawEmptyCanvas(canvas, title) {
   const { ctx, width, height } = resizeCanvas(canvas);
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#efe6d8";
+  ctx.fillStyle = "#f8fafc";
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = "#5f696a";
-  ctx.font = "600 16px 'Avenir Next', sans-serif";
+  ctx.fillStyle = "#667085";
+  ctx.font = "600 16px ui-sans-serif, system-ui, sans-serif";
   ctx.fillText(title, 24, height / 2);
 }
 
@@ -348,7 +348,7 @@ function drawScatter() {
   }
   const { ctx, width, height } = resizeCanvas(el.prevalenceCanvas);
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#fffdf8";
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
   const margin = { left: 58, right: 24, top: 20, bottom: 42 };
@@ -357,7 +357,7 @@ function drawScatter() {
   const maxX = Math.max(...rows.map((r) => Number(r.slide_prevalence || 0)), 0.05);
   const maxY = Math.max(...rows.map((r) => Number(r.mean_positive_activation || 0)), 0.05);
 
-  ctx.strokeStyle = "#cabda8";
+  ctx.strokeStyle = "#d0d5dd";
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(margin.left, margin.top);
@@ -365,8 +365,8 @@ function drawScatter() {
   ctx.lineTo(margin.left + plotW, margin.top + plotH);
   ctx.stroke();
 
-  ctx.fillStyle = "#6d6558";
-  ctx.font = "12px 'Avenir Next', sans-serif";
+  ctx.fillStyle = "#667085";
+  ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
   ctx.fillText("slide prevalence", margin.left + plotW - 96, height - 12);
   ctx.save();
   ctx.translate(16, margin.top + plotH / 2);
@@ -385,7 +385,7 @@ function drawScatter() {
     const isFocused = point.latent_idx === state.selectedLatentIdx;
     const isSelected = selectedSet.has(String(point.latent_idx));
     ctx.beginPath();
-    ctx.fillStyle = isFocused ? "#c26d2d" : (isSelected ? "rgba(39,79,75,0.78)" : "rgba(113, 115, 109, 0.24)");
+    ctx.fillStyle = isFocused ? "#10a37f" : (isSelected ? "rgba(16,163,127,0.56)" : "rgba(152,162,179,0.3)");
     ctx.arc(point.cx, point.cy, isFocused ? 4.5 : (isSelected ? 2.8 : 1.8), 0, Math.PI * 2);
     ctx.fill();
   }
@@ -402,7 +402,7 @@ function drawUmap() {
   }
   const { ctx, width, height } = resizeCanvas(el.umapCanvas);
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#fffdf8";
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
   const margin = 20;
@@ -424,7 +424,7 @@ function drawUmap() {
     const isFocused = point.latent_idx === state.selectedLatentIdx;
     const isSelected = selectedStrategies.length > 0;
     ctx.beginPath();
-    ctx.fillStyle = isFocused ? "#c26d2d" : (isSelected ? "rgba(144, 99, 45, 0.74)" : "rgba(120, 128, 125, 0.22)");
+    ctx.fillStyle = isFocused ? "#10a37f" : (isSelected ? "rgba(15,23,42,0.55)" : "rgba(152,162,179,0.28)");
     ctx.arc(point.cx, point.cy, isFocused ? 4.5 : (isSelected ? 2.6 : 1.8), 0, Math.PI * 2);
     ctx.fill();
   }
@@ -439,7 +439,7 @@ function drawHistogram(hist) {
   }
   const { ctx, width, height } = resizeCanvas(el.histCanvas);
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#fffdf8";
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
   const margin = { left: 34, right: 14, top: 16, bottom: 30 };
@@ -447,13 +447,13 @@ function drawHistogram(hist) {
   const plotH = height - margin.top - margin.bottom;
   const maxCount = Math.max(...hist.counts, 1);
   const barW = plotW / hist.counts.length;
-  ctx.fillStyle = "rgba(39,79,75,0.85)";
+  ctx.fillStyle = "rgba(16,163,127,0.9)";
   hist.counts.forEach((count, idx) => {
     const h = (Number(count) / maxCount) * plotH;
     ctx.fillRect(margin.left + idx * barW + 1, margin.top + plotH - h, Math.max(1, barW - 2), h);
   });
-  ctx.fillStyle = "#6d6558";
-  ctx.font = "12px 'Avenir Next', sans-serif";
+  ctx.fillStyle = "#667085";
+  ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
   ctx.fillText(hist.histogram_unit || "slide_max_activation", margin.left, height - 8);
 }
 
@@ -470,6 +470,8 @@ function contactSheetUrl(detail) {
 function renderLatentProfile(detail) {
   const metric = detail.metric_row || {};
   const summary = detail.summary_row || {};
+  const reps = detail.representatives || [];
+  const lead = reps.find((r) => String(r.representative_method || "") === String(state.representativeMethod || "")) || reps[0] || null;
   const cards = [
     ["Latent", detail.latent_idx],
     ["Strategy", detail.strategy || "n/a"],
@@ -481,17 +483,29 @@ function renderLatentProfile(detail) {
     ["Unique slides", summary.unique_slides || 0],
   ];
   el.latentProfile.innerHTML = `
+    <div class="profile-hero">
+      ${lead ? `<img class="profile-lead-tile" loading="lazy" src="${tileUrl(lead, lead.slide_key, 280)}" alt="representative tile for latent ${esc(detail.latent_idx)}" />` : `<div class="profile-lead-tile"></div>`}
+      <div class="profile-lead-copy">
+        <div class="panel-kicker">Latent Profile</div>
+        <h3>Latent ${esc(detail.latent_idx)}${detail.strategy ? ` • ${esc(String(detail.strategy).replaceAll("_", " "))}` : ""}</h3>
+        <p>${lead ? `Primary representative from ${esc(String(lead.representative_method || "selected method").replaceAll("_", " "))}, anchored on ${esc(lead.slide_key || "-")}.` : "No representative tile available for this latent."}</p>
+        <div class="focus-meta">
+          ${lead ? `<span class="meta-pill">${esc(String(lead.representative_method || "").replaceAll("_", " "))}</span>` : ""}
+          ${lead?.slide_key ? `<span class="meta-pill">${esc(lead.slide_key)}</span>` : ""}
+          <span class="meta-pill">${Number(metric.max_activation_seen || summary.max_activation || 0).toFixed(3)} max act</span>
+        </div>
+      </div>
+    </div>
     <div class="profile-grid">
       ${cards.map(([k, v]) => `<div class="profile-card"><strong>${esc(k)}</strong><span>${esc(v)}</span></div>`).join("")}
     </div>
   `;
 
-  const reps = detail.representatives || [];
   if (!reps.length) {
     el.methodStrip.innerHTML = `<p class="meta">No representative rows were found for this latent.</p>`;
   } else {
     el.methodStrip.innerHTML = reps.map((r) => `
-      <article class="method-card">
+      <article class="method-card ${String(r.representative_method || "") === String(state.representativeMethod || "") ? "selected" : ""}">
         <img loading="lazy" src="${tileUrl(r, r.slide_key, 128)}" alt="representative ${esc(r.representative_method)}" />
         <div>
           <strong>${esc((r.representative_method || "").replaceAll("_", " "))}</strong>
@@ -593,7 +607,7 @@ function renderSlideDetail(data, detail) {
       </section>
 
       <section>
-        <div class="mini-head">Top firing slides for this latent</div>
+        <div class="mini-head">Top firing slides</div>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Slide</th><th>Max act</th><th>Positive tiles</th><th>Cohort</th></tr></thead>
@@ -603,7 +617,7 @@ function renderSlideDetail(data, detail) {
       </section>
 
       <section>
-        <div class="mini-head">Support tiles on the current slide</div>
+        <div class="mini-head">Support tiles</div>
         <div class="support-grid">
           ${tileCards || `<p class="meta">No support tiles for the current filter on this slide.</p>`}
         </div>
@@ -678,8 +692,8 @@ async function loadModelData() {
 
   try {
     el.summary.innerHTML = `<div class="metric"><strong>Loading</strong><span>Refreshing atlas…</span></div>`;
-    el.modelHeading.textContent = "Loading SAE atlas…";
-    el.modelNarrative.textContent = "Refreshing representative tiles and analytics for the selected model.";
+    el.modelHeading.textContent = "Loading latent atlas…";
+    el.modelNarrative.textContent = "Refreshing the focused workspace for the selected model.";
     el.heroMetrics.innerHTML = `<span class="meta-pill">Loading model context</span>`;
     const [summaryData, repData, analyticsData] = await Promise.all([
       fetchJson(`/api/sae/summary?${q({ model_id: state.selectedModelId })}`),
@@ -691,6 +705,11 @@ async function loadModelData() {
       })}`),
       fetchJson(`/api/sae/analytics?${q({ model_id: state.selectedModelId })}`),
     ]);
+
+    if ((!repData.rows || repData.rows.length === 0) && Array.isArray(repData.available_methods) && repData.available_methods.length > 0) {
+      state.representativeMethod = repData.available_methods[0];
+      return loadModelData();
+    }
 
     state.analytics = {
       available: !!analyticsData.available,
