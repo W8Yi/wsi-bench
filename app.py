@@ -804,8 +804,29 @@ class SaeCache:
         materialized_rows_csv = self._resolve_optional_path(str(entry.get("materialized_rows_csv", "")))
         materialized_contact_sheets_dir = self._resolve_optional_path(str(entry.get("materialized_contact_sheets_dir", "")))
 
+        missing_required: List[str] = []
+        if not rep_csv.exists():
+            missing_required.append(str(rep_csv))
+        if not support_csv.exists():
+            missing_required.append(str(support_csv))
+        if missing_required:
+            raise FileNotFoundError(
+                "Representative bundle files not found: "
+                + ", ".join(missing_required)
+            )
+
         representative_rows = self._load_representative_rows(rep_csv)
         support_rows = self._load_representative_rows(support_csv)
+        if not representative_rows:
+            raise ValueError(
+                f"Representative bundle loaded zero rows from {rep_csv}. "
+                "This usually means the configured bundle path is wrong for this machine."
+            )
+        if not support_rows:
+            raise ValueError(
+                f"Representative support bundle loaded zero rows from {support_csv}. "
+                "This usually means the configured bundle path is wrong for this machine."
+            )
         dedup_support_rows = self._dedupe_support_rows(support_rows)
         latent_rows = self._load_latent_summary_rows(latent_summary_csv)
         summary = self._load_json_file(summary_json)
