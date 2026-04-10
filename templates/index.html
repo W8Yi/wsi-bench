@@ -7,68 +7,82 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <h1>WSI QC Dashboard</h1>
-      <p>Professional triage for slide-feature coverage.</p>
-    </div>
-    <nav class="top-nav">
-      <a href="/" class="active">QC Dashboard</a>
-      <a href="/sae">SAE Inspector</a>
-    </nav>
-  </header>
-
-  <main class="app-main">
-    <section class="toolbar">
-      <div class="toolbar-group">
-        <button id="refreshBtn" type="button">Refresh Index</button>
-        <button id="resetBtn" type="button" class="ghost-btn">Reset</button>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">WSI Bench</div>
+        <h1>QC Dashboard</h1>
+        <p>Review slide coverage, feature availability, and thumbnail health in one focused workspace.</p>
       </div>
-      <div class="toolbar-group toolbar-search">
-        <label for="queryInput">Search</label>
-        <input id="queryInput" type="text" placeholder="slide, case, encoder" />
-      </div>
-      <div class="toolbar-group toolbar-right">
-        <button id="toggleDetailsBtn" type="button" class="ghost-btn">Hide Details</button>
-      </div>
-    </section>
+      <nav class="top-nav">
+        <a href="/" class="active">QC Dashboard</a>
+        <a href="/sae">SAE Atlas</a>
+      </nav>
+    </header>
 
-    <section class="summary-strip" id="summary"></section>
-
-    <section class="workspace">
-      <section class="worklist-panel">
-        <div class="worklist-head">
-          <nav class="status-tabs" id="statusTabs"></nav>
+    <main class="app-main">
+      <section class="toolbar">
+        <div class="toolbar-group">
+          <button id="refreshBtn" type="button">Refresh</button>
+          <button id="resetBtn" type="button" class="ghost-btn">Reset</button>
         </div>
-
-        <div class="table-wrap">
-          <table id="recordsTable">
-            <thead>
-              <tr>
-                <th>Slide</th>
-                <th>Case</th>
-                <th>Cohort</th>
-                <th>Features</th>
-                <th>Encoders</th>
-                <th>Size (GB)</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+        <div class="toolbar-group toolbar-search">
+          <label for="queryInput">Search</label>
+          <input id="queryInput" type="text" placeholder="slide, case, cohort, encoder" />
+        </div>
+        <div class="toolbar-group toolbar-right">
+          <button id="toggleDetailsBtn" type="button" class="ghost-btn">Hide Details</button>
         </div>
       </section>
 
-      <aside class="details-panel" id="detailsPanel">
-        <section class="details" id="details">
+      <section class="summary-strip" id="summary"></section>
+
+      <section class="workspace">
+        <section class="worklist-panel">
           <div class="panel-head">
-            <h2>Details</h2>
-            <button id="closeDetailsBtn" type="button" class="ghost-btn">Close</button>
+            <div>
+              <div class="panel-kicker">Worklist</div>
+              <h2>Slides</h2>
+            </div>
+            <div class="panel-meta" id="tableMeta">Loading…</div>
           </div>
-          <p class="meta">Select a slide to inspect thumbnail and feature coverage.</p>
+
+          <div class="worklist-head">
+            <nav class="status-tabs" id="statusTabs"></nav>
+          </div>
+
+          <div class="table-wrap">
+            <table id="recordsTable">
+              <thead>
+                <tr>
+                  <th>Slide</th>
+                  <th>Case</th>
+                  <th>Cohort</th>
+                  <th>Features</th>
+                  <th>Encoders</th>
+                  <th>Size (GB)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </section>
-      </aside>
-    </section>
-  </main>
+
+        <aside class="details-panel" id="detailsPanel">
+          <section class="details" id="details">
+            <div class="panel-head">
+              <div>
+                <div class="panel-kicker">Current focus</div>
+                <h2>Slide Detail</h2>
+              </div>
+              <button id="closeDetailsBtn" type="button" class="ghost-btn">Close</button>
+            </div>
+            <p class="meta">Select a slide to inspect thumbnail and feature coverage.</p>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

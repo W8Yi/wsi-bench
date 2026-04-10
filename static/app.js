@@ -26,6 +26,7 @@ const el = {
   tbody: document.querySelector("#recordsTable tbody"),
   details: document.getElementById("details"),
   detailsPanel: document.getElementById("detailsPanel"),
+  tableMeta: document.getElementById("tableMeta"),
 };
 
 function esc(value) {
@@ -98,12 +99,12 @@ function tabCounts() {
 
 function renderSummary(payload) {
   const chips = [
-    `<div class="metric-chip"><strong>Slides</strong>${payload.slide_count}</div>`,
-    `<div class="metric-chip"><strong>Matched</strong>${payload.matched_feature_count}</div>`,
-    `<div class="metric-chip"><strong>Unmatched</strong>${payload.unmatched_feature_count}</div>`,
-    `<div class="metric-chip"><strong>Thumb</strong>${payload.thumbnail_enabled ? "enabled" : "disabled"}</div>`,
-    `<div class="metric-chip"><strong>Slides Root</strong>${esc((payload.slides_root || []).join(", ") || "(none)")}</div>`,
-    `<div class="metric-chip"><strong>Features Root</strong>${esc((payload.features_root || []).join(", ") || "(none)")}</div>`,
+    `<div class="metric-chip"><strong>Slides</strong><span>${payload.slide_count}</span></div>`,
+    `<div class="metric-chip"><strong>Matched features</strong><span>${payload.matched_feature_count}</span></div>`,
+    `<div class="metric-chip"><strong>Unmatched features</strong><span>${payload.unmatched_feature_count}</span></div>`,
+    `<div class="metric-chip"><strong>Thumbnails</strong><span>${payload.thumbnail_enabled ? "enabled" : "disabled"}</span></div>`,
+    `<div class="metric-chip"><strong>Slides root</strong><span>${esc((payload.slides_root || []).join(", ") || "(none)")}</span></div>`,
+    `<div class="metric-chip"><strong>Features root</strong><span>${esc((payload.features_root || []).join(", ") || "(none)")}</span></div>`,
   ];
   el.summary.innerHTML = chips.join("");
 }
@@ -131,6 +132,7 @@ function renderTable() {
     return String(a.slide.filename || "").localeCompare(String(b.slide.filename || ""));
   });
   el.tbody.innerHTML = "";
+  el.tableMeta.textContent = `${rows.length} visible`;
 
   for (const r of rows) {
     const selected = state.selectedPath && state.selectedPath === r.slide.path ? "selected" : "";
@@ -170,10 +172,13 @@ function renderTable() {
 function renderDetailsClosed() {
   el.details.innerHTML = `
     <div class="panel-head">
-      <h2>Details</h2>
+      <div>
+        <div class="panel-kicker">Current focus</div>
+        <h2>Slide Detail</h2>
+      </div>
       <button id="closeDetailsBtn" type="button" class="ghost-btn">Close</button>
     </div>
-    <p class="meta">Details hidden. Click <strong>Show Details</strong> or select a row.</p>
+    <p class="meta">Details are hidden. Click <strong>Show Details</strong> or choose a slide from the worklist.</p>
   `;
 }
 
@@ -190,7 +195,10 @@ function renderDetails(record) {
 
   el.details.innerHTML = `
     <div class="panel-head">
-      <h2>Details</h2>
+      <div>
+        <div class="panel-kicker">Current focus</div>
+        <h2>Slide Detail</h2>
+      </div>
       <button id="closeDetailsBtn" type="button" class="ghost-btn">Close</button>
     </div>
 
@@ -208,8 +216,8 @@ function renderDetails(record) {
       <div class="info-row"><strong>Encoders</strong><span>${encoderText}</span></div>
     </div>
 
-    <div>
-      <strong>Features</strong>
+    <div class="feature-section">
+      <strong>Feature files</strong>
       ${featureItems}
     </div>
 
@@ -310,14 +318,21 @@ function resetFilters() {
 }
 
 async function loadIndex() {
-  el.summary.innerHTML = `<div class="metric-chip"><strong>Status</strong>Indexing files...</div>`;
+  el.summary.innerHTML = `<div class="metric-chip"><strong>Status</strong><span>Indexing files…</span></div>`;
+  el.tableMeta.textContent = "Loading…";
   const res = await fetch("/api/index");
   const payload = await res.json();
   state.rows = payload.records || [];
   state.thumbnailEnabled = Boolean(payload.thumbnail_enabled);
-  state.selectedPath = "";
+  const selectedRecord = state.rows.find((r) => r.slide.path === state.selectedPath) || state.rows[0] || null;
+  state.selectedPath = selectedRecord ? selectedRecord.slide.path : "";
   renderSummary(payload);
   renderAll();
+  if (!state.detailsClosed && selectedRecord) {
+    renderDetails(selectedRecord);
+  } else if (!selectedRecord) {
+    renderDetailsClosed();
+  }
 }
 
 el.refreshBtn.addEventListener("click", loadIndex);
@@ -368,5 +383,6 @@ el.toggleDetailsBtn.addEventListener("click", () => {
 });
 
 loadIndex().catch((err) => {
-  el.summary.innerHTML = `<div class="metric-chip"><strong>Error</strong>${esc(err.message)}</div>`;
+  el.summary.innerHTML = `<div class="metric-chip"><strong>Error</strong><span>${esc(err.message)}</span></div>`;
+  el.tableMeta.textContent = "Load failed";
 });
