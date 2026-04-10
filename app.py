@@ -36,6 +36,7 @@ APP_HOST = os.environ.get("WSI_VIEWER_HOST", "127.0.0.1")
 APP_PORT = int(os.environ.get("WSI_VIEWER_PORT", "8080"))
 THUMB_TIMEOUT_SEC = float(os.environ.get("WSI_THUMB_TIMEOUT_SEC", "6"))
 SAE_MANIFEST_PATH = Path(os.environ.get("WSI_SAE_MANIFEST", Path(__file__).parent / "config" / "sae_models.json"))
+SAE_PATHS_CONFIG_PATH = Path(os.environ.get("WSI_SAE_PATHS_CONFIG", Path(__file__).parent / "config" / "sae_paths.json"))
 SAE_TILE_CACHE_ROOT = Path(os.environ.get("WSI_SAE_TILE_CACHE_ROOT", "/mnt/data/WSI_thumbs/sae_tiles"))
 
 SLIDE_EXTS = {
@@ -193,6 +194,30 @@ def infer_encoder(path: Path) -> str:
     return "unknown"
 
 
+def _read_json_dict(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text())
+        return raw if isinstance(raw, dict) else {}
+    except Exception:
+        return {}
+
+
+def _expand_template_value(text: str, variables: Dict[str, str]) -> str:
+    out = text
+    for _ in range(8):
+        changed = False
+        for key, value in variables.items():
+            token = "${" + key + "}"
+            if token in out:
+                out = out.replace(token, value)
+                changed = True
+        if not changed:
+            break
+    return out
+
+
 @dataclass
 class FeatureFile:
     path: str
@@ -286,13 +311,90 @@ class IndexCache:
 class SaeCache:
     def __init__(self, manifest_path: Path) -> None:
         self.manifest_path = manifest_path
+        self.paths_config_path = SAE_PATHS_CONFIG_PATH
+        self.path_settings = self._load_path_settings()
         self.data: Dict[str, Dict[str, Any]] = {}
         self.models: List[Dict[str, Any]] = []
         self.errors: List[str] = []
         self.loaded = False
 
+    def _load_path_settings(self) -> Dict[str, str]:
+        defaults: Dict[str, str] = {
+            "wsi_sae_repo": os.environ.get("WSI_SAE_REPO", "/home/w8yi/wsi-sae"),
+            "slides_root": os.environ.get("WSI_SAE_DEFAULT_SLIDES_ROOT", "/mnt/data/wsi_slides/TCGA"),
+            "materialized_root": os.environ.get("WSI_SAE_DEFAULT_MATERIALIZED_ROOT", "/mnt/data/derived/sae_tiles"),
+        }
+        defaults["exports_root"] = os.environ.get(
+            "WSI_SAE_DEFAULT_EXPORTS_ROOT",
+            "${wsi_sae_repo}/exports",
+        )
+
+        raw = _read_json_dict(self.paths_config_path)
+        merged: Dict[str, str] = dict(defaults)
+        for key, value in raw.items():
+            if isinstance(value, str) and value.strip():
+                merged[key] = value.strip()
+
+        repo_candidates: List[str] = []
+        configured_repo = str(merged.get("wsi_sae_repo", "")).strip()
+        if configured_repo:
+            repo_candidates.append(configured_repo)
+        raw_candidates = raw.get("wsi_sae_repo_candidates", []) if isinstance(raw, dict) else []
+        if isinstance(raw_candidates, list):
+            repo_candidates.extend(str(v).strip() for v in raw_candidates if str(v).strip())
+        repo_candidates.extend([
+            "/home/w8yi/wsi-sae",
+            "/common/users/wq50/wsi-sae",
+        ])
+        seen_candidates: List[str] = []
+        for candidate in repo_candidates:
+            if candidate and candidate not in seen_candidates:
+                seen_candidates.append(candidate)
+        for candidate in seen_candidates:
+            expanded_candidate = _expand_template_value(candidate, {**defaults, **merged})
+            if Path(expanded_candidate).expanduser().exists():
+                merged["wsi_sae_repo"] = expanded_candidate
+                break
+
+        expanded: Dict[str, str] = {}
+        for key in merged:
+            expanded[key] = _expand_template_value(merged[key], {**defaults, **expanded, **merged})
+        return expanded
+
+    def _expand_entry_value(self, value: str) -> str:
+        return _expand_template_value(value, self.path_settings)
+
+    def _prepare_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        prepared = dict(entry)
+
+        run_name = str(prepared.get("run_name", "")).strip()
+        export_split = str(prepared.get("export_split", "test")).strip() or "test"
+        slides_root_default = self.path_settings.get("slides_root", "")
+        if not str(prepared.get("slides_root", "")).strip() and slides_root_default:
+            prepared["slides_root"] = slides_root_default
+
+        exports_root = self.path_settings.get("exports_root", "")
+        if run_name and exports_root:
+            bundle_dir = Path(self._expand_entry_value(exports_root)) / run_name / f"representatives_{export_split}"
+            prepared.setdefault("representative_latents_csv", str(bundle_dir / "representative_latents.csv"))
+            prepared.setdefault("representative_support_tiles_csv", str(bundle_dir / "representative_support_tiles.csv"))
+            prepared.setdefault("latent_summary_csv", str(bundle_dir / "latent_summary.csv"))
+            prepared.setdefault("bundle_summary_json", str(bundle_dir / "bundle_summary.json"))
+
+            materialized_subdir = str(prepared.get("materialized_subdir", run_name)).strip()
+            materialized_root = self.path_settings.get("materialized_root", "")
+            if materialized_subdir and materialized_root:
+                materialized_dir = Path(self._expand_entry_value(materialized_root)) / materialized_subdir
+                prepared.setdefault("materialized_rows_csv", str(materialized_dir / "materialized_rows.csv"))
+                prepared.setdefault("materialized_contact_sheets_dir", str(materialized_dir / "contact_sheets"))
+
+        for key, value in list(prepared.items()):
+            if isinstance(value, str) and value:
+                prepared[key] = self._expand_entry_value(value)
+        return prepared
+
     def _resolve_path(self, p: str) -> Path:
-        cand = Path(p).expanduser()
+        cand = Path(self._expand_entry_value(p)).expanduser()
         if cand.is_absolute():
             return cand
         return (self.manifest_path.parent / cand).resolve()
@@ -1207,6 +1309,7 @@ class SaeCache:
             if not isinstance(entry, dict):
                 self.errors.append("Skipped non-object model entry in manifest.")
                 continue
+            entry = self._prepare_entry(entry)
             required = ["model_id", "slides_root"]
             for req in required:
                 if req not in entry:

@@ -5,13 +5,9 @@
       "model_name": "TCGA SEAL SAE Atlas (ReLU v1)",
       "encoder": "seal",
       "dataset": "TCGA",
-      "slides_root": "/mnt/data/wsi_slides/TCGA",
-      "representative_latents_csv": "/common/users/wq50/wsi-sae/exports/tcga_seal_sae_relu_v1/representatives_test/representative_latents.csv",
-      "representative_support_tiles_csv": "/common/users/wq50/wsi-sae/exports/tcga_seal_sae_relu_v1/representatives_test/representative_support_tiles.csv",
-      "latent_summary_csv": "/common/users/wq50/wsi-sae/exports/tcga_seal_sae_relu_v1/representatives_test/latent_summary.csv",
-      "bundle_summary_json": "/common/users/wq50/wsi-sae/exports/tcga_seal_sae_relu_v1/representatives_test/bundle_summary.json",
-      "materialized_rows_csv": "/mnt/data/derived/sae_tiles/tcga_seal_sae_relu_v1/materialized_rows.csv",
-      "materialized_contact_sheets_dir": "/mnt/data/derived/sae_tiles/tcga_seal_sae_relu_v1/contact_sheets",
+      "run_name": "tcga_seal_sae_relu_v1",
+      "export_split": "test",
+      "materialized_subdir": "tcga_seal_sae_relu_v1",
       "tile_size": 256
     }
   ]

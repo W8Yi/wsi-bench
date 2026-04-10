@@ -1,0 +1,10 @@
+{
+  "wsi_sae_repo": "/home/w8yi/wsi-sae",
+  "wsi_sae_repo_candidates": [
+    "/home/w8yi/wsi-sae",
+    "/common/users/wq50/wsi-sae"
+  ],
+  "exports_root": "${wsi_sae_repo}/exports",
+  "slides_root": "/mnt/data/wsi_slides/TCGA",
+  "materialized_root": "/mnt/data/derived/sae_tiles"
+}

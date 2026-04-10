@@ -39,6 +39,7 @@ WSI_FEATURES_DIRS=/mnt/data/wsi_features \
 WSI_VIEWER_PORT=8080 \
 WSI_THUMB_TIMEOUT_SEC=10 \
 WSI_SAE_MANIFEST=/home/w8yi/wsi_slide_viewer/config/sae_models.json \
+WSI_SAE_PATHS_CONFIG=/home/w8yi/wsi_slide_viewer/config/sae_paths.json \
 WSI_SAE_TILE_CACHE_ROOT=/mnt/data/WSI_thumbs/sae_tiles \
 python3 app.py
 ```
@@ -60,6 +61,23 @@ If naming differs across encoders, adjust naming or update `to_slide_id()` in `a
 
 ## SAE manifest
 
+`wsi-bench` now separates model identity from machine-local paths:
+
+- `config/sae_models.json` stores which runs/models to show
+- `config/sae_paths.json` stores local path roots such as your `wsi-sae` repo and materialized-output base dir
+
+Default local path settings in `config/sae_paths.json`:
+
+- `wsi_sae_repo=/home/w8yi/wsi-sae`
+- `exports_root=${wsi_sae_repo}/exports`
+- `slides_root=/mnt/data/wsi_slides/TCGA`
+- `materialized_root=/mnt/data/derived/sae_tiles`
+
+That means the local-PC default is now:
+
+- SAE exports live under your local `wsi-sae/exports`
+- materialized rows/contact sheets live under `/mnt/data/derived/sae_tiles`
+
 The SAE site is model-driven by `config/sae_models.json`.
 
 Each model entry supports either the legacy prototype bundle fields or the new representative bundle fields.
@@ -70,8 +88,24 @@ Shared fields:
 - `model_name`
 - `encoder`
 - `dataset`
-- `slides_root`
+- `slides_root` (optional if provided by `sae_paths.json`)
 - `tile_size` (optional, default `256`)
+
+Representative run shorthand fields:
+
+- `run_name`
+- `export_split` (optional, default `test`)
+- `materialized_subdir` (optional, default `run_name`)
+
+If `run_name` is present, `wsi-bench` will infer:
+
+- `${exports_root}/${run_name}/representatives_${export_split}/representative_latents.csv`
+- `${exports_root}/${run_name}/representatives_${export_split}/representative_support_tiles.csv`
+- sibling `latent_summary.csv` and `bundle_summary.json`
+- `${materialized_root}/${materialized_subdir}/materialized_rows.csv`
+- `${materialized_root}/${materialized_subdir}/contact_sheets`
+
+Both `sae_models.json` and explicit path fields also support `${...}` placeholders from `sae_paths.json`.
 
 Representative bundle fields:
 
