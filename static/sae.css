@@ -205,13 +205,13 @@ button:hover {
 }
 
 .metric {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--line);
   background: var(--panel-soft);
-  min-height: 88px;
+  min-height: 72px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   align-content: space-between;
 }
 
@@ -224,15 +224,16 @@ button:hover {
 }
 
 .metric span {
-  font-size: 1.15rem;
+  font-size: 1.02rem;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.85fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.8fr);
   gap: 16px;
+  align-items: start;
 }
 
 .focus-panel {
@@ -250,12 +251,12 @@ button:hover {
   justify-content: space-between;
   align-items: end;
   gap: 14px;
-  padding: 18px 20px 14px;
+  padding: 14px 16px 12px;
 }
 
 .panel-head h2 {
   margin-top: 4px;
-  font-size: 1.45rem;
+  font-size: 1.22rem;
   line-height: 1.08;
 }
 
@@ -281,11 +282,11 @@ button:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.85fr);
   gap: 14px;
-  padding: 18px 20px 0;
+  padding: 14px 16px 0;
 }
 
 .focus-note {
-  padding: 16px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--panel-soft);
@@ -333,15 +334,15 @@ button:hover {
 }
 
 .profile-body {
-  padding: 18px 20px 8px;
+  padding: 14px 16px 8px;
 }
 
 .profile-hero {
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+  gap: 14px;
   align-items: start;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .profile-lead-tile {
@@ -367,7 +368,7 @@ button:hover {
 .profile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .profile-card,
@@ -381,7 +382,7 @@ button:hover {
 }
 
 .profile-card {
-  padding: 14px;
+  padding: 12px;
   border-radius: 14px;
 }
 
@@ -405,8 +406,8 @@ button:hover {
 .profile-subgrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  padding: 0 20px 20px;
+  gap: 12px;
+  padding: 0 16px 16px;
 }
 
 .mini-panel {
@@ -415,7 +416,7 @@ button:hover {
 }
 
 .mini-head {
-  padding: 14px 16px 0;
+  padding: 12px 14px 0;
 }
 
 .plot-panel canvas,
@@ -423,20 +424,39 @@ button:hover {
   width: 100%;
   height: auto;
   display: block;
-  padding: 16px 16px 8px;
+  padding: 10px 12px 6px;
   cursor: crosshair;
+}
+
+.plot-panel canvas {
+  height: 200px;
+}
+
+#histCanvas {
+  height: 170px;
 }
 
 .method-strip,
 .contact-sheet-wrap,
 .support-preview {
-  padding: 12px 16px 16px;
+  padding: 10px 14px 14px;
 }
 
 .method-strip,
 .support-preview,
 .contact-sheet-wrap {
   min-height: 120px;
+}
+
+.support-preview,
+.contact-sheet-wrap {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.method-strip {
+  max-height: 300px;
+  overflow: auto;
 }
 
 .method-card {
@@ -483,7 +503,7 @@ button:hover {
 .support-preview-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .support-preview-card img {
@@ -498,19 +518,28 @@ button:hover {
 .analytics-column,
 .evidence-column {
   display: grid;
-  gap: 16px;
+  gap: 12px;
+}
+
+.analytics-column {
+  position: sticky;
+  top: 12px;
 }
 
 .panel-caption {
   margin: 0;
-  padding: 0 16px 16px;
+  padding: 0 12px 12px;
   line-height: 1.5;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
 }
 
 .table-wrap {
   overflow: auto;
-  padding: 0 16px 16px;
+  padding: 0 14px 14px;
+}
+
+.cohort-panel .table-wrap {
+  max-height: 300px;
 }
 
 table {
@@ -538,7 +567,9 @@ tbody tr.is-current td {
 }
 
 .slide-panel .detail-body {
-  padding: 16px 20px 20px;
+  padding: 14px 16px 16px;
+  max-height: 620px;
+  overflow: auto;
 }
 
 .detail-stack {
@@ -577,20 +608,24 @@ tbody tr.is-current td {
 
 .gallery-panel {
   overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: 760px;
 }
 
 .rep-gallery {
-  padding: 16px;
+  padding: 14px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  overflow: auto;
 }
 
 .rep-card {
   display: grid;
-  grid-template-columns: 96px 1fr;
-  gap: 12px;
-  padding: 12px;
+  grid-template-columns: 84px 1fr;
+  gap: 10px;
+  padding: 10px;
   border-radius: 16px;
   cursor: pointer;
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
@@ -613,7 +648,7 @@ tbody tr.is-current td {
 }
 
 .rep-title {
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   line-height: 1.15;
 }
 
@@ -661,6 +696,10 @@ tbody tr.is-current td {
   .workspace-grid {
     grid-template-columns: 1fr;
   }
+
+  .analytics-column {
+    position: static;
+  }
 }
 
 @media (max-width: 980px) {
@@ -706,7 +745,7 @@ tbody tr.is-current td {
   .contact-sheet-wrap,
   .support-preview,
   .table-wrap {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 14px;
+    padding-right: 14px;
   }
 }
