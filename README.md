@@ -62,28 +62,52 @@ If naming differs across encoders, adjust naming or update `to_slide_id()` in `a
 
 The SAE site is model-driven by `config/sae_models.json`.
 
-Each model entry supports:
+Each model entry supports either the legacy prototype bundle fields or the new representative bundle fields.
+
+Shared fields:
 
 - `model_id`
 - `model_name`
 - `encoder`
 - `dataset`
 - `slides_root`
+- `tile_size` (optional, default `256`)
+
+Representative bundle fields:
+
+- `representative_latents_csv`
+- `representative_support_tiles_csv`
+- `latent_summary_csv` (optional)
+- `bundle_summary_json` (optional)
+
+Legacy prototype bundle fields:
+
 - `prototype_tiles_csv`
 - `top_attention_tiles_csv` (optional)
-- `tile_size` (optional, default `256`)
 
 ## SAE APIs
 
 - `GET /api/sae/models`
 - `GET /api/sae/summary?model_id=...`
 - `GET /api/sae/latents?model_id=...&group=...&limit=...`
-- `GET /api/sae/representatives?model_id=...&method=max_activation&group=...&limit=...`
+- `GET /api/sae/representatives?model_id=...&method=max_activation&strategy=top_activation&group=...&limit=...`
 - `GET /api/sae/slides?model_id=...&q=...&limit=...`
-- `GET /api/sae/slide?model_id=...&slide_key=...`
+- `GET /api/sae/slide?model_id=...&slide_key=...&method=max_activation&strategy=top_activation`
 - `GET /api/sae/tile?model_id=...&slide_key=...&x=...&y=...&size=...&tile_index=...`
 
-`representatives` currently supports `method=max_activation`. The API shape is method-driven so alternate ranking methods can be added without changing the UI contract.
+For representative bundles, `representatives` supports:
+
+- `method=max_activation`
+- `method=median_activation`
+- `method=diverse_support`
+- `method=slide_spread`
+
+and can filter by `strategy`, for example:
+
+- `strategy=top_activation`
+- `strategy=top_variance`
+- `strategy=top_sparsity`
+- `strategy=sdf_parent_balanced`
 
 Summary response includes interpretability-oriented fields such as:
 - `rep_method`, `rep_latents`, `rep_slide_coverage`, `rep_mean_unique_slides_per_latent`

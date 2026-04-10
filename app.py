@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -362,7 +363,262 @@ class SaeCache:
                 })
         return rows
 
+    def _load_json_file(self, path: Optional[Path]) -> Dict[str, Any]:
+        if path is None or not path.exists():
+            return {}
+        try:
+            raw = json.loads(path.read_text())
+            return raw if isinstance(raw, dict) else {}
+        except Exception:
+            return {}
+
+    def _load_representative_rows(self, csv_path: Path) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        if not csv_path.exists():
+            return rows
+        with csv_path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                slide_key = (r.get("slide_key") or "").strip().upper()
+                if not slide_key:
+                    continue
+                rows.append({
+                    "run_name": r.get("run_name") or "",
+                    "stage": r.get("stage") or "",
+                    "dataset": r.get("dataset") or "",
+                    "encoder": r.get("encoder") or "",
+                    "data_split": r.get("data_split") or "",
+                    "latent_strategy": r.get("latent_strategy") or "",
+                    "latent_idx": _to_int(r.get("latent_idx"), -1),
+                    "latent_group": (r.get("latent_group") or "unknown").strip(),
+                    "representative_method": r.get("representative_method") or "",
+                    "row_kind": r.get("row_kind") or "",
+                    "method_rank": _to_int(r.get("method_rank"), 0),
+                    "source_rank": _to_int(r.get("source_rank"), 0),
+                    "case_id": (r.get("case_id") or to_case_id(slide_key)).upper(),
+                    "slide_key": slide_key,
+                    "cohort": r.get("cohort") or "",
+                    "tile_index": _to_int(r.get("tile_index"), -1),
+                    "coord_x": _to_int(r.get("coord_x"), 0),
+                    "coord_y": _to_int(r.get("coord_y"), 0),
+                    "feature_relpath": r.get("feature_relpath") or "",
+                    "feature_h5_name": r.get("feature_h5_name") or "",
+                    "legacy_h5_path": r.get("legacy_h5_path") or "",
+                    "activation": _to_float(r.get("activation"), 0.0),
+                    "attention": 0.0,
+                    "method_score": _to_float(r.get("method_score"), 0.0),
+                    "slide_support_count": _to_int(r.get("slide_support_count"), 0),
+                    "slide_max_activation": _to_float(r.get("slide_max_activation"), 0.0),
+                    "slide_mean_activation": _to_float(r.get("slide_mean_activation"), 0.0),
+                    "max_activation_global": _to_float(r.get("max_activation_global"), 0.0),
+                    "variance_global": _to_float(r.get("variance_global"), 0.0),
+                    "sparsity_score_global": _to_float(r.get("sparsity_score_global"), 0.0),
+                })
+        return rows
+
+    def _load_latent_summary_rows(self, csv_path: Optional[Path]) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        if csv_path is None or not csv_path.exists():
+            return rows
+        with csv_path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                rows.append({
+                    "run_name": r.get("run_name") or "",
+                    "stage": r.get("stage") or "",
+                    "dataset": r.get("dataset") or "",
+                    "encoder": r.get("encoder") or "",
+                    "data_split": r.get("data_split") or "",
+                    "latent_strategy": r.get("latent_strategy") or "",
+                    "latent_idx": _to_int(r.get("latent_idx"), -1),
+                    "latent_group": (r.get("latent_group") or "unknown").strip(),
+                    "count": _to_int(r.get("support_tile_count"), 0),
+                    "max_activation": _to_float(r.get("activation_max"), 0.0),
+                    "mean_activation": _to_float(r.get("activation_mean"), 0.0),
+                    "unique_slides": _to_int(r.get("unique_slide_count"), 0),
+                    "unique_cases": _to_int(r.get("unique_case_count"), 0),
+                    "activation_p50": _to_float(r.get("activation_p50"), 0.0),
+                    "activation_p90": _to_float(r.get("activation_p90"), 0.0),
+                    "max_activation_global": _to_float(r.get("max_activation_global"), 0.0),
+                    "variance_global": _to_float(r.get("variance_global"), 0.0),
+                    "sparsity_score_global": _to_float(r.get("sparsity_score_global"), 0.0),
+                })
+        rows.sort(key=lambda x: (x["latent_strategy"], x["max_activation"], x["count"]), reverse=True)
+        return rows
+
+    def _dedupe_support_rows(self, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        seen: set[tuple[Any, ...]] = set()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            key = (
+                row.get("latent_strategy", ""),
+                row.get("latent_idx", -1),
+                row.get("slide_key", ""),
+                row.get("tile_index", -1),
+                row.get("coord_x", 0),
+                row.get("coord_y", 0),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+        return out
+
+    def _build_representative_model_data(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        model_id = entry["model_id"]
+        model_name = entry.get("model_name", model_id)
+        encoder = entry.get("encoder", "unknown")
+        dataset = entry.get("dataset", "")
+        tile_size = _to_int(entry.get("tile_size", 256), 256)
+        slides_root = self._resolve_path(entry["slides_root"])
+        rep_csv = self._resolve_path(entry["representative_latents_csv"])
+        support_csv = self._resolve_path(entry["representative_support_tiles_csv"])
+        latent_summary_csv_raw = str(entry.get("latent_summary_csv", "")).strip()
+        summary_json_raw = str(entry.get("bundle_summary_json", "")).strip()
+        latent_summary_csv = self._resolve_path(latent_summary_csv_raw) if latent_summary_csv_raw else None
+        summary_json = self._resolve_path(summary_json_raw) if summary_json_raw else None
+
+        representative_rows = self._load_representative_rows(rep_csv)
+        support_rows = self._load_representative_rows(support_csv)
+        dedup_support_rows = self._dedupe_support_rows(support_rows)
+        latent_rows = self._load_latent_summary_rows(latent_summary_csv)
+        summary = self._load_json_file(summary_json)
+        slide_lookup = self._build_slide_lookup(slides_root)
+
+        representative_methods: Dict[str, List[Dict[str, Any]]] = {}
+        available_methods = sorted({str(r.get("representative_method", "")) for r in representative_rows if str(r.get("representative_method", ""))})
+        available_strategies = sorted({str(r.get("latent_strategy", "")) for r in representative_rows if str(r.get("latent_strategy", ""))})
+
+        for method in available_methods:
+            rows = [r for r in representative_rows if r.get("representative_method") == method]
+            rows.sort(key=lambda x: (x.get("method_score", 0.0), x.get("activation", 0.0), x.get("latent_idx", -1)), reverse=True)
+            representative_methods[method] = rows
+
+        support_by_slide: Dict[str, List[Dict[str, Any]]] = {}
+        for row in support_rows:
+            support_by_slide.setdefault(str(row["slide_key"]), []).append(row)
+
+        slide_summaries: List[Dict[str, Any]] = []
+        slide_rows_map: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for row in dedup_support_rows:
+            slide_rows_map[str(row["slide_key"])].append(row)
+        for slide_key, slide_rows in slide_rows_map.items():
+            any_row = slide_rows[0]
+            slide_summaries.append({
+                "slide_key": slide_key,
+                "case_id": any_row.get("case_id", to_case_id(slide_key)),
+                "prototype_tiles": len(slide_rows),
+                "attention_tiles": 0,
+                "top_activation": max((r["activation"] for r in slide_rows), default=0.0),
+                "top_attention": 0.0,
+                "unique_latents": len({(r["latent_strategy"], r["latent_idx"]) for r in slide_rows}),
+                "slide_path": slide_lookup.get(slide_key, ""),
+            })
+        slide_summaries.sort(key=lambda x: (x["top_activation"], x["prototype_tiles"]), reverse=True)
+
+        if not latent_rows:
+            latent_map: Dict[tuple[str, int], Dict[str, Any]] = {}
+            for row in dedup_support_rows:
+                key = (str(row.get("latent_strategy", "")), int(row.get("latent_idx", -1)))
+                if key not in latent_map:
+                    latent_map[key] = {
+                        "latent_strategy": key[0],
+                        "latent_idx": key[1],
+                        "latent_group": row.get("latent_group", "unknown"),
+                        "count": 0,
+                        "max_activation": 0.0,
+                        "mean_activation": 0.0,
+                        "unique_slides": set(),
+                    }
+                ag = latent_map[key]
+                ag["count"] += 1
+                ag["max_activation"] = max(ag["max_activation"], row["activation"])
+                ag["mean_activation"] += row["activation"]
+                ag["unique_slides"].add(row["slide_key"])
+            latent_rows = []
+            for ag in latent_map.values():
+                count = int(ag["count"])
+                latent_rows.append({
+                    "latent_strategy": ag["latent_strategy"],
+                    "latent_idx": ag["latent_idx"],
+                    "latent_group": ag["latent_group"],
+                    "count": count,
+                    "max_activation": ag["max_activation"],
+                    "mean_activation": (ag["mean_activation"] / count) if count > 0 else 0.0,
+                    "unique_slides": len(ag["unique_slides"]),
+                })
+            latent_rows.sort(key=lambda x: (x["latent_strategy"], x["max_activation"], x["count"]), reverse=True)
+
+        activations = [r["activation"] for r in dedup_support_rows]
+        activation_p50 = _percentile(activations, 50.0)
+        activation_p95 = _percentile(activations, 95.0)
+        rep_slide_keys = {str(r.get("slide_key", "")) for r in representative_rows if str(r.get("slide_key", ""))}
+        latent_counts = [int(r.get("count", 0)) for r in latent_rows]
+        rep_mean_unique_slides = (
+            sum(_to_int(r.get("unique_slides"), 0) for r in latent_rows) / len(latent_rows)
+        ) if latent_rows else 0.0
+        if not summary:
+            summary = {
+                "model_id": model_id,
+                "model_name": model_name,
+                "encoder": encoder,
+                "dataset": dataset,
+                "total_slides": len(slide_summaries),
+                "total_latents": len(latent_rows),
+                "total_representative_rows": len(representative_rows),
+                "total_support_rows": len(support_rows),
+                "max_activation": max(activations) if activations else 0.0,
+                "mean_activation": (sum(activations) / len(activations)) if activations else 0.0,
+            }
+        summary["model_id"] = model_id
+        summary["model_name"] = model_name
+        summary["encoder"] = encoder
+        summary["dataset"] = dataset
+        summary["total_slides"] = summary.get("total_slides", len(slide_summaries))
+        summary["total_latents"] = summary.get("total_latents", len(latent_rows))
+        summary["total_representative_rows"] = summary.get("total_representative_rows", len(representative_rows))
+        summary["total_support_rows"] = summary.get("total_support_rows", len(support_rows))
+        summary["total_prototype_rows"] = summary.get("total_prototype_rows", len(support_rows))
+        summary["total_attention_rows"] = summary.get("total_attention_rows", 0)
+        summary["activation_p50"] = summary.get("activation_p50", activation_p50)
+        summary["activation_p95"] = summary.get("activation_p95", activation_p95)
+        summary["activation_tail_ratio"] = summary.get("activation_tail_ratio", (activation_p95 / activation_p50) if activation_p50 > 0 else 0.0)
+        summary["rep_method"] = summary.get("rep_method", "precomputed")
+        summary["rep_latents"] = summary.get("rep_latents", len(representative_rows))
+        summary["rep_slide_coverage"] = summary.get("rep_slide_coverage", (100.0 * len(rep_slide_keys) / len(slide_summaries)) if slide_summaries else 0.0)
+        summary["rep_mean_unique_slides_per_latent"] = summary.get("rep_mean_unique_slides_per_latent", rep_mean_unique_slides)
+        summary["latent_concentration_hhi"] = summary.get("latent_concentration_hhi", _hhi(latent_counts))
+        summary["available_representative_methods"] = available_methods
+        summary["available_latent_strategies"] = available_strategies
+        summary["tile_size"] = tile_size
+
+        return {
+            "config": {
+                "model_id": model_id,
+                "model_name": model_name,
+                "encoder": encoder,
+                "dataset": dataset,
+                "slides_root": str(slides_root),
+                "representative_latents_csv": str(rep_csv),
+                "representative_support_tiles_csv": str(support_csv),
+                "latent_summary_csv": str(latent_summary_csv) if latent_summary_csv is not None else "",
+                "bundle_summary_json": str(summary_json) if summary_json is not None else "",
+                "tile_size": tile_size,
+            },
+            "summary": summary,
+            "slide_lookup": slide_lookup,
+            "representative_rows": representative_rows,
+            "support_rows": support_rows,
+            "support_by_slide": support_by_slide,
+            "slide_summaries": slide_summaries,
+            "latent_rows": latent_rows,
+            "representative_methods": representative_methods,
+        }
+
     def _build_model_data(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        if str(entry.get("representative_latents_csv", "")).strip():
+            return self._build_representative_model_data(entry)
+
         model_id = entry["model_id"]
         model_name = entry.get("model_name", model_id)
         encoder = entry.get("encoder", "unknown")
@@ -558,11 +814,24 @@ class SaeCache:
             if not isinstance(entry, dict):
                 self.errors.append("Skipped non-object model entry in manifest.")
                 continue
-            for req in ["model_id", "slides_root", "prototype_tiles_csv"]:
+            required = ["model_id", "slides_root"]
+            for req in required:
                 if req not in entry:
                     self.errors.append(f"Skipped model missing '{req}': {entry}")
                     entry = None
                     break
+            if entry is None:
+                continue
+            has_representative_bundle = bool(str(entry.get("representative_latents_csv", "")).strip())
+            if has_representative_bundle:
+                for req in ["representative_latents_csv", "representative_support_tiles_csv"]:
+                    if not str(entry.get(req, "")).strip():
+                        self.errors.append(f"Skipped representative model missing '{req}': {entry}")
+                        entry = None
+                        break
+            elif not str(entry.get("prototype_tiles_csv", "")).strip():
+                self.errors.append(f"Skipped model missing 'prototype_tiles_csv': {entry}")
+                entry = None
             if entry is None:
                 continue
 
@@ -867,6 +1136,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         method = (qs.get("method") or ["max_activation"])[0].strip().lower() or "max_activation"
+        strategy = (qs.get("strategy") or [""])[0].strip().lower()
         group = (qs.get("group") or [""])[0].strip().lower()
         limit = max(1, min(self._parse_int(qs, "limit", 24), 256))
 
@@ -879,12 +1149,16 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         rows = methods.get(method, [])
+        if strategy:
+            rows = [r for r in rows if str(r.get("latent_strategy", "")).strip().lower() == strategy]
         if group:
             rows = [r for r in rows if str(r.get("latent_group", "")).strip().lower() == group]
 
         self._send_json(200, {
             "method": method,
+            "strategy": strategy,
             "available_methods": sorted(methods.keys()),
+            "available_strategies": list(model.get("summary", {}).get("available_latent_strategies", [])),
             "rows": rows[:limit],
             "total": len(rows),
         })
@@ -892,6 +1166,8 @@ class Handler(BaseHTTPRequestHandler):
     def _sae_slide_detail(self, qs: Dict[str, List[str]]) -> None:
         model_id = (qs.get("model_id") or [""])[0]
         slide_key = (qs.get("slide_key") or [""])[0].strip().upper()
+        method = (qs.get("method") or [""])[0].strip().lower()
+        strategy = (qs.get("strategy") or [""])[0].strip().lower()
 
         model = SAE_CACHE.get_model(model_id)
         if not model:
@@ -906,21 +1182,30 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": f"Slide not found in model: {slide_key}"})
             return
 
-        prs = model["proto_by_slide"].get(slide_key, [])
-        ars = model["attn_by_slide"].get(slide_key, [])
+        if "support_by_slide" in model:
+            prs = model["support_by_slide"].get(slide_key, [])
+            if method:
+                prs = [r for r in prs if str(r.get("representative_method", "")).strip().lower() == method]
+            if strategy:
+                prs = [r for r in prs if str(r.get("latent_strategy", "")).strip().lower() == strategy]
+            ars = []
+        else:
+            prs = model["proto_by_slide"].get(slide_key, [])
+            ars = model["attn_by_slide"].get(slide_key, [])
 
         latent_map: Dict[int, Dict[str, Any]] = {}
         for r in prs:
-            lidx = r["latent_idx"]
-            if lidx not in latent_map:
-                latent_map[lidx] = {
-                    "latent_idx": lidx,
+            key = (str(r.get("latent_strategy", "")), int(r["latent_idx"]))
+            if key not in latent_map:
+                latent_map[key] = {
+                    "latent_idx": int(r["latent_idx"]),
+                    "latent_strategy": r.get("latent_strategy", ""),
                     "latent_group": r.get("latent_group", "unknown"),
                     "count": 0,
                     "max_activation": 0.0,
                     "max_attention": 0.0,
                 }
-            ag = latent_map[lidx]
+            ag = latent_map[key]
             ag["count"] += 1
             ag["max_activation"] = max(ag["max_activation"], r["activation"])
             ag["max_attention"] = max(ag["max_attention"], r["attention"])
@@ -928,10 +1213,16 @@ class Handler(BaseHTTPRequestHandler):
         top_latents = sorted(latent_map.values(), key=lambda x: (x["max_activation"], x["count"]), reverse=True)[:40]
 
         top_tiles: List[Dict[str, Any]] = []
-        for r in sorted(prs, key=lambda x: x["activation"], reverse=True)[:120]:
+        if "support_by_slide" in model:
+            ordered_prs = sorted(prs, key=lambda x: (x.get("method_rank", 0), -x.get("activation", 0.0)))
+        else:
+            ordered_prs = sorted(prs, key=lambda x: x["activation"], reverse=True)
+        for r in ordered_prs[:120]:
             top_tiles.append({
-                "source": "prototype",
+                "source": "support" if "support_by_slide" in model else "prototype",
                 "latent_idx": r["latent_idx"],
+                "latent_strategy": r.get("latent_strategy", ""),
+                "representative_method": r.get("representative_method", ""),
                 "activation": r["activation"],
                 "attention": r["attention"],
                 "tile_index": r["tile_index"],

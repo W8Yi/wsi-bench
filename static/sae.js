@@ -7,6 +7,8 @@ const state = {
   filteredRepresentatives: [],
   selectedSlideKey: "",
   selectedLatentIdx: null,
+  selectedLatentStrategy: "",
+  representativeStrategy: "",
   representativeMethod: "max_activation",
   showTechnical: false,
 };
@@ -17,6 +19,7 @@ const el = {
   repSearch: document.getElementById("repSearch"),
   refreshBtn: document.getElementById("refreshBtn"),
   summary: document.getElementById("summary"),
+  repStrategySelect: document.getElementById("repStrategySelect"),
   repMethodSelect: document.getElementById("repMethodSelect"),
   repMeta: document.getElementById("repMeta"),
   repCards: document.getElementById("repCards"),
@@ -124,6 +127,22 @@ function renderRepresentativeMethodSelect(methods) {
   el.repMethodSelect.value = state.representativeMethod;
 }
 
+function renderRepresentativeStrategySelect(strategies) {
+  const available = (strategies || []).filter(Boolean);
+  const current = state.representativeStrategy || "";
+  el.repStrategySelect.innerHTML = `<option value="">All strategies</option>`;
+  for (const s of available) {
+    const opt = document.createElement("option");
+    opt.value = s;
+    opt.textContent = s.replaceAll("_", " ");
+    el.repStrategySelect.appendChild(opt);
+  }
+  if (![...el.repStrategySelect.options].some((o) => o.value === current)) {
+    state.representativeStrategy = "";
+  }
+  el.repStrategySelect.value = state.representativeStrategy;
+}
+
 function renderLatentGroupSelect(rows) {
   const groups = Array.from(new Set(rows.map((r) => r.latent_group).filter(Boolean))).sort();
   const current = el.latentGroupSelect.value || "";
@@ -149,6 +168,7 @@ function applyRepresentativeFilter() {
       String(r.latent_idx).toLowerCase().includes(qv)
       || String(r.slide_key || "").toLowerCase().includes(qv)
       || String(r.case_id || "").toLowerCase().includes(qv)
+      || String(r.latent_strategy || "").toLowerCase().includes(qv)
     );
   });
 }
@@ -162,7 +182,7 @@ function renderRepresentatives() {
   for (const r of rows) {
     const article = document.createElement("article");
     article.className = "rep-card";
-    if (state.selectedLatentIdx === r.latent_idx) {
+    if (state.selectedLatentIdx === r.latent_idx && state.selectedLatentStrategy === (r.latent_strategy || "")) {
       article.classList.add("selected");
     }
     article.innerHTML = `
@@ -171,12 +191,14 @@ function renderRepresentatives() {
       </div>
       <div class="rep-body">
         <div class="rep-title">latent ${esc(r.latent_idx)} <span>${esc(r.latent_group || "-")}</span></div>
-        <div class="rep-stats">max act ${Number(r.score || 0).toFixed(3)} | slides ${esc(r.unique_slides || 0)}</div>
+        <div class="rep-stats">${esc(r.latent_strategy || "-")} | ${esc(r.representative_method || state.representativeMethod || "-")}</div>
+        <div class="rep-stats">score ${Number(r.method_score || r.activation || 0).toFixed(3)} | support ${esc(r.slide_support_count || 0)}</div>
         <div class="rep-slide">${esc(r.slide_key || "-")}</div>
       </div>
     `;
     article.addEventListener("click", () => {
       state.selectedLatentIdx = r.latent_idx;
+      state.selectedLatentStrategy = r.latent_strategy || "";
       state.selectedSlideKey = r.slide_key;
       renderRepresentatives();
       loadSlideDetail(r.slide_key);
@@ -223,14 +245,16 @@ function renderSlideDetail(data) {
   )).join("");
 
   const tileCards = tiles.slice(0, 24).map((t) => {
-    const stat = t.source === "prototype"
+    const stat = (t.source === "prototype" || t.source === "support")
       ? `act ${Number(t.activation || 0).toFixed(3)}`
       : `attn ${Number(t.attention || 0).toFixed(3)}`;
+    const strategy = t.latent_strategy ? ` | ${esc(t.latent_strategy)}` : "";
+    const method = t.representative_method ? ` | ${esc(t.representative_method)}` : "";
     return `
       <article class="tile-card">
         <img loading="lazy" src="${tileUrl(t, slide.slide_key, data.tile_size || 256)}" alt="tile" />
         <div class="tile-meta">
-          <div><strong>${esc(t.source)}</strong> ${esc(stat)}</div>
+          <div><strong>${esc(t.source)}</strong> ${esc(stat)}${strategy}${method}</div>
           <div>latent: ${t.latent_idx === null || t.latent_idx === undefined ? "-" : esc(t.latent_idx)}</div>
           <div>idx ${esc(t.tile_index)} @ (${esc(t.coord_x)}, ${esc(t.coord_y)})</div>
         </div>
@@ -278,7 +302,12 @@ function renderSlideDetail(data) {
 async function loadSlideDetail(slideKey) {
   try {
     renderDetailPlaceholder("Loading slide detail...");
-    const data = await fetchJson(`/api/sae/slide?${q({ model_id: state.selectedModelId, slide_key: slideKey })}`);
+    const data = await fetchJson(`/api/sae/slide?${q({
+      model_id: state.selectedModelId,
+      slide_key: slideKey,
+      method: state.representativeMethod,
+      strategy: state.representativeStrategy || state.selectedLatentStrategy,
+    })}`);
     if (slideKey !== state.selectedSlideKey) {
       return;
     }
@@ -300,17 +329,24 @@ async function loadModelData() {
   try {
     const [summaryData, repData] = await Promise.all([
       fetchJson(`/api/sae/summary?${q({ model_id: state.selectedModelId })}`),
-      fetchJson(`/api/sae/representatives?${q({ model_id: state.selectedModelId, method: state.representativeMethod, limit: 256 })}`),
+      fetchJson(`/api/sae/representatives?${q({
+        model_id: state.selectedModelId,
+        method: state.representativeMethod,
+        strategy: state.representativeStrategy,
+        limit: 256,
+      })}`),
     ]);
 
     renderSummary(summaryData.summary || {}, summaryData.config || {});
     state.representatives = repData.rows || [];
 
     renderRepresentativeMethodSelect(repData.available_methods || []);
+    renderRepresentativeStrategySelect(repData.available_strategies || []);
     renderLatentGroupSelect(state.representatives);
     renderRepresentatives();
 
     state.selectedSlideKey = "";
+    state.selectedLatentStrategy = "";
     renderDetailPlaceholder("Select a representative latent tile to inspect details.");
   } catch (err) {
     el.summary.innerHTML = `<div class="metric"><strong>Error</strong>${esc(err.message)}</div>`;
@@ -363,6 +399,7 @@ el.latentGroupSelect.addEventListener("change", () => {
 
 el.clearLatentBtn.addEventListener("click", () => {
   state.selectedLatentIdx = null;
+  state.selectedLatentStrategy = "";
   state.selectedSlideKey = "";
   renderRepresentatives();
   renderDetailPlaceholder("Select a representative latent tile to inspect details.");
@@ -370,6 +407,11 @@ el.clearLatentBtn.addEventListener("click", () => {
 
 el.repMethodSelect.addEventListener("change", () => {
   state.representativeMethod = el.repMethodSelect.value || "max_activation";
+  loadModelData();
+});
+
+el.repStrategySelect.addEventListener("change", () => {
+  state.representativeStrategy = el.repStrategySelect.value || "";
   loadModelData();
 });
 
